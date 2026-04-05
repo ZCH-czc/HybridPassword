@@ -1,0 +1,156 @@
+:root {
+  color-scheme: light dark;
+  --host-safe-top: 0px;
+  --host-safe-bottom: 0px;
+  --vault-radius: 26px;
+  --vault-radius-lg: 30px;
+  --vault-shadow: 0 18px 36px rgba(20, 34, 58, 0.08);
+  --vault-shadow-soft: 0 10px 24px rgba(20, 34, 58, 0.05);
+  --vault-bottom-nav-height: 68px;
+}
+
+.v-theme--dark {
+  --vault-shadow: 0 22px 42px rgba(0, 0, 0, 0.34);
+  --vault-shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: Roboto, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(var(--v-theme-primary), 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(var(--v-theme-primary), 0.1), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(var(--v-theme-primary), 0.08), transparent 24%),
+    linear-gradient(
+      180deg,
+      rgb(var(--v-theme-background)) 0%,
+      rgba(var(--v-theme-primary), 0.04) 100%
+    );
+  transition:
+    background 260ms ease,
+    color 260ms ease;
+}
+
+.app-main {
+  min-height: 100vh;
+}
+
+.app-shell-wrap {
+  transition:
+    filter 320ms ease,
+    transform 320ms ease,
+    opacity 320ms ease;
+}
+
+.app-shell-wrap--blurred {
+  filter: blur(16px);
+  transform: scale(0.992);
+  pointer-events: none;
+  user-select: none;
+}
+
+.app-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding-top: calc(var(--host-safe-top) + 12px);
+  padding-bottom: calc(var(--host-safe-bottom) + var(--vault-bottom-nav-height) + 28px);
+}
+
+.border-sm {
+  border: none !important;
+  background: rgba(var(--v-theme-surface), 0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--vault-shadow-soft);
+}
+
+.v-card,
+.v-sheet:not(.v-bottom-navigation),
+.v-dialog .v-card,
+.v-list,
+.v-window,
+.v-chip,
+.v-btn-toggle {
+  border-radius: var(--vault-radius) !important;
+}
+
+.v-field,
+.v-field__outline,
+.v-text-field .v-field,
+.v-textarea .v-field {
+  border-radius: var(--vault-radius) !important;
+}
+
+.v-field--variant-solo-filled {
+  box-shadow: none !important;
+  background: rgba(var(--v-theme-surface), 0.76) !important;
+}
+
+.v-card,
+.v-btn,
+.v-chip,
+.v-sheet,
+.v-list-item,
+.v-text-field,
+.v-textarea,
+.v-bottom-navigation,
+.v-avatar,
+.v-btn-toggle {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    transform 220ms ease,
+    color 220ms ease,
+    opacity 220ms ease,
+    filter 220ms ease;
+}
+
+.v-card:hover {
+  box-shadow: var(--vault-shadow);
+}
+
+.v-btn:hover {
+  transform: translateY(-1px);
+}
+
+.v-bottom-navigation .v-btn:hover {
+  transform: none;
+}
+
+.vault-page-enter-active,
+.vault-page-leave-active {
+  transition:
+    opacity 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.vault-page-enter-from,
+.vault-page-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.v-overlay__scrim {
+  transition:
+    opacity 260ms ease,
+    backdrop-filter 260ms ease;
+}
+
+.master-key-overlay .v-overlay__scrim {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+@media (min-width: 600px) {
+  .app-shell {
+    padding-top: calc(var(--host-safe-top) + 16px);
+    padding-bottom: calc(var(--host-safe-bottom) + var(--vault-bottom-nav-height) + 32px);
+  }
+}

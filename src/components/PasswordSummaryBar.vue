@@ -1,0 +1,82 @@
+<script setup>
+defineProps({
+  total: {
+    type: Number,
+    default: 0,
+  },
+  filtered: {
+    type: Number,
+    default: 0,
+  },
+  notes: {
+    type: Number,
+    default: 0,
+  },
+});
+</script>
+
+<template>
+  <v-row class="mb-4" dense>
+    <v-col cols="12" sm="4">
+      <v-card class="border-sm summary-card">
+        <v-card-text>
+          <div class="d-flex align-center justify-space-between ga-3">
+            <div>
+              <div class="text-body-2 text-medium-emphasis">已保存密码</div>
+              <div class="text-h5 font-weight-medium mt-1">{{ total }}</div>
+            </div>
+            <v-avatar color="primary" variant="tonal">
+              <v-icon>mdi-key-chain-variant</v-icon>
+            </v-avatar>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-col>
+
+    <v-col cols="12" sm="4">
+      <v-card class="border-sm summary-card">
+        <v-card-text>
+          <div class="d-flex align-center justify-space-between ga-3">
+            <div>
+              <div class="text-body-2 text-medium-emphasis">当前筛选结果</div>
+              <div class="text-h5 font-weight-medium mt-1">{{ filtered }}</div>
+            </div>
+            <v-avatar color="secondary" variant="tonal">
+              <v-icon>mdi-filter-variant</v-icon>
+            </v-avatar>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-col>
+
+    <v-col cols="12" sm="4">
+      <v-card class="border-sm summary-card">
+        <v-card-text>
+          <div class="d-flex align-center justify-space-between ga-3">
+            <div>
+              <div class="text-body-2 text-medium-emphasis">备注总数</div>
+              <div class="text-h5 font-weight-medium mt-1">{{ notes }}</div>
+            </div>
+            <v-avatar color="surface-variant" variant="flat">
+              <v-icon>mdi-note-multiple-outline</v-icon>
+            </v-avatar>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-col>
+  </v-row>
+</template>
+
+<style scoped>
+.summary-card {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 0.94),
+      rgba(var(--v-theme-surface), 0.82)
+    ),
+    radial-gradient(circle at top right, rgba(var(--v-theme-primary), 0.08), transparent 42%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+</style>

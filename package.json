@@ -1,0 +1,25 @@
+{
+  "name": "password-manager-webview",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "sync:maui": "node ./scripts/sync-maui-wwwroot.mjs",
+    "build:hybrid": "npm run build && npm run sync:maui",
+    "preview": "vite preview",
+    "host:windows:build": "npm run build:hybrid",
+    "host:android:build": "npm run build:hybrid"
+  },
+  "dependencies": {
+    "@mdi/font": "7.4.47",
+    "vue": "3.5.32",
+    "vuetify": "3.12.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.5",
+    "vite": "8.0.3",
+    "vite-plugin-vuetify": "2.1.3"
+  }
+}
