@@ -1,14 +1,15 @@
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
-import { zhHans } from "vuetify/locale";
+import { en, zhHans } from "vuetify/locale";
 
 export default createVuetify({
   components,
   directives,
   locale: {
     locale: "zhHans",
-    messages: { zhHans },
+    fallback: "en",
+    messages: { zhHans, en },
   },
   theme: {
     defaultTheme: "light",

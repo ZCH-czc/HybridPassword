@@ -118,6 +118,20 @@ Build the frontend and sync the output into the MAUI host:
 npm run build:hybrid
 ```
 
+Build a Windows setup installer:
+
+```bash
+npm run setup:windows
+```
+
+The installer version is taken from the root `package.json` `version` field first. If it is missing, the script falls back to the MAUI host `ApplicationDisplayVersion`.
+
+Build an Android APK:
+
+```bash
+npm run setup:android
+```
+
 Sync an existing frontend build into the MAUI host:
 
 ```bash
@@ -144,6 +158,56 @@ If MAUI still references stale hashed assets after `build:hybrid`, run a clean f
 dotnet clean blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-windows10.0.19041.0
 dotnet clean blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-android
 ```
+
+## Windows Release Publishing
+
+Generate the unpackaged Windows release folder:
+
+```bash
+dotnet publish blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-windows10.0.19041.0 -c Release -p:WindowsPackageType=None
+```
+
+The published output is written to:
+
+```text
+blazor/blazorApp/blazorApp/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish
+```
+
+Generate the Windows installer from the project root:
+
+```bash
+npm run setup:windows
+```
+
+The generated setup file is written to:
+
+```text
+blazor/blazorApp/blazorApp/bin/Release/Installer
+```
+
+## Android Release Publishing
+
+Generate a release APK:
+
+```bash
+npm run setup:android
+```
+
+The script runs MAUI Android publish with APK output enabled, then copies the newest generated APK into:
+
+```text
+blazor/blazorApp/blazorApp/bin/Release/Android
+```
+
+The output file name follows this format:
+
+```text
+PasswordVault_<version>_android.apk
+```
+
+The file name version is taken from the root `package.json` `version` field first, then falls back to the MAUI host `ApplicationDisplayVersion`.
+
+If you later need a store-ready signing key, configure Android keystore signing in the MAUI project and keep using the same script.
 
 ## Security Notes
 
@@ -175,6 +239,8 @@ dotnet clean blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-android
 - `vite.config.js` uses relative asset paths for embedded WebView loading
 - Browser-based debugging falls back to web file APIs
 - In the hybrid host, native save/open dialogs are preferred
+- Windows setup output is generated at `blazor/blazorApp/blazorApp/bin/Release/Installer`
+- The current Windows installer packages the published app folder as-is; it does not bundle external runtime installers
 - For strict CSP scenarios, allow at least:
   - `script-src 'self'`
   - `style-src 'self' 'unsafe-inline'`

@@ -8,6 +8,8 @@
     "build": "vite build",
     "sync:maui": "node ./scripts/sync-maui-wwwroot.mjs",
     "build:hybrid": "npm run build && npm run sync:maui",
+    "setup:android": "powershell -ExecutionPolicy Bypass -File ./scripts/build-android-apk.ps1",
+    "setup:windows": "powershell -ExecutionPolicy Bypass -File ./scripts/build-windows-setup.ps1",
     "preview": "vite preview",
     "host:windows:build": "npm run build:hybrid",
     "host:android:build": "npm run build:hybrid"

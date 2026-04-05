@@ -1,4 +1,6 @@
 <script setup>
+import { useAppPreferences } from "@/composables/useAppPreferences";
+
 defineProps({
   items: {
     type: Array,
@@ -11,25 +13,22 @@ defineProps({
 });
 
 const emit = defineEmits(["restore", "permanent-delete"]);
-
-function formatDeletedAt(timestamp) {
-  return new Date(timestamp).toLocaleString();
-}
+const { t, formatDateTime } = useAppPreferences();
 </script>
 
 <template>
   <v-card class="border-sm">
     <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
-      <span>最近删除</span>
-      <v-chip variant="tonal" color="error">{{ `${items.length}条` }}</v-chip>
+      <span>{{ t("deleted.title") }}</span>
+      <v-chip variant="tonal" color="error">{{ t("common.countItems", { count: items.length }) }}</v-chip>
     </v-card-title>
 
     <v-card-text class="pa-4">
       <div v-if="!items.length" class="py-8 text-center">
         <v-icon size="40" color="medium-emphasis">mdi-delete-clock-outline</v-icon>
-        <div class="text-subtitle-1 mt-3">最近删除 0条</div>
+        <div class="text-subtitle-1 mt-3">{{ t("deleted.emptyTitle") }}</div>
         <div class="text-body-2 text-medium-emphasis mt-2">
-          从列表中删除的项目会先进入这里，你可以恢复或彻底删除。
+          {{ t("deleted.emptyBody") }}
         </div>
       </div>
 
@@ -42,13 +41,13 @@ function formatDeletedAt(timestamp) {
           <div class="d-flex flex-column flex-md-row align-md-center justify-space-between ga-4">
             <div class="min-w-0">
               <div class="text-subtitle-1 font-weight-medium text-truncate">
-                {{ item.siteName || "未命名项目" }}
+                {{ item.siteName || t("common.unnamedEntry") }}
               </div>
               <div class="text-body-2 text-medium-emphasis text-truncate mt-1">
                 {{ item.username }}
               </div>
               <div class="text-caption text-medium-emphasis mt-2">
-                删除于 {{ formatDeletedAt(item.deletedAt) }}
+                {{ t("deleted.deletedAt", { time: formatDateTime(item.deletedAt) }) }}
               </div>
             </div>
 
@@ -59,7 +58,7 @@ function formatDeletedAt(timestamp) {
                 :loading="Boolean(busyIds[item.id])"
                 @click="emit('restore', item.id)"
               >
-                恢复
+                {{ t("deleted.restore") }}
               </v-btn>
               <v-btn
                 color="error"
@@ -68,7 +67,7 @@ function formatDeletedAt(timestamp) {
                 :loading="Boolean(busyIds[item.id])"
                 @click="emit('permanent-delete', item.id)"
               >
-                彻底删除
+                {{ t("deleted.permanentDelete") }}
               </v-btn>
             </div>
           </div>

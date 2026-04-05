@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 
 defineProps({
   modelValue: {
@@ -10,27 +11,28 @@ defineProps({
 
 const emit = defineEmits(["update:modelValue", "complete"]);
 const step = ref(0);
+const { t } = useAppPreferences();
 
-const slides = [
+const slides = computed(() => [
   {
-    title: "欢迎来到你的密码库",
-    body: "主页展示概览、收藏夹和最近项目，适合快速进入日常使用的密码。",
+    title: t("onboarding.slide1.title"),
+    body: t("onboarding.slide1.body"),
     icon: "mdi-home-variant-outline",
   },
   {
-    title: "列表页管理全部项目",
-    body: "你可以在列表页查看全部、收藏夹和最近删除，也可以直接恢复误删记录。",
+    title: t("onboarding.slide2.title"),
+    body: t("onboarding.slide2.body"),
     icon: "mdi-format-list-bulleted",
   },
   {
-    title: "设置页负责外观与安全",
-    body: "深色模式、导入导出和修改主密码都集中在设置页，主界面会更干净。",
+    title: t("onboarding.slide3.title"),
+    body: t("onboarding.slide3.body"),
     icon: "mdi-cog-outline",
   },
-];
+]);
 
 function nextStep() {
-  if (step.value >= slides.length - 1) {
+  if (step.value >= slides.value.length - 1) {
     emit("complete");
     emit("update:modelValue", false);
     step.value = 0;
@@ -58,7 +60,7 @@ function skipGuide() {
     <v-card class="onboarding-card">
       <v-card-text class="pa-6 pa-sm-7">
         <div class="d-flex align-center justify-space-between mb-6">
-          <v-chip color="primary" variant="tonal">新手指引</v-chip>
+          <v-chip color="primary" variant="tonal">{{ t("onboarding.title") }}</v-chip>
           <div class="text-caption text-medium-emphasis">{{ step + 1 }}/{{ slides.length }}</div>
         </div>
 
@@ -81,9 +83,9 @@ function skipGuide() {
         </v-window>
 
         <div class="d-flex align-center justify-space-between mt-4">
-          <v-btn variant="text" @click="skipGuide">跳过</v-btn>
+          <v-btn variant="text" @click="skipGuide">{{ t("common.skip") }}</v-btn>
           <v-btn color="primary" @click="nextStep">
-            {{ step === slides.length - 1 ? "开始使用" : "下一步" }}
+            {{ step === slides.length - 1 ? t("common.start") : t("common.next") }}
           </v-btn>
         </div>
       </v-card-text>

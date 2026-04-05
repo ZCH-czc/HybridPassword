@@ -1,4 +1,6 @@
 <script setup>
+import { useAppPreferences } from "@/composables/useAppPreferences";
+
 defineProps({
   total: {
     type: Number,
@@ -13,6 +15,8 @@ defineProps({
     default: 0,
   },
 });
+
+const { t } = useAppPreferences();
 </script>
 
 <template>
@@ -22,7 +26,7 @@ defineProps({
         <v-card-text>
           <div class="d-flex align-center justify-space-between ga-3">
             <div>
-              <div class="text-body-2 text-medium-emphasis">已保存密码</div>
+              <div class="text-body-2 text-medium-emphasis">{{ t("home.savedCount", { count: total }) }}</div>
               <div class="text-h5 font-weight-medium mt-1">{{ total }}</div>
             </div>
             <v-avatar color="primary" variant="tonal">
@@ -38,7 +42,7 @@ defineProps({
         <v-card-text>
           <div class="d-flex align-center justify-space-between ga-3">
             <div>
-              <div class="text-body-2 text-medium-emphasis">当前筛选结果</div>
+              <div class="text-body-2 text-medium-emphasis">{{ t("home.filteredCount", { count: filtered }) }}</div>
               <div class="text-h5 font-weight-medium mt-1">{{ filtered }}</div>
             </div>
             <v-avatar color="secondary" variant="tonal">
@@ -54,7 +58,7 @@ defineProps({
         <v-card-text>
           <div class="d-flex align-center justify-space-between ga-3">
             <div>
-              <div class="text-body-2 text-medium-emphasis">备注总数</div>
+              <div class="text-body-2 text-medium-emphasis">{{ t("home.notesCount", { count: notes }) }}</div>
               <div class="text-h5 font-weight-medium mt-1">{{ notes }}</div>
             </div>
             <v-avatar color="surface-variant" variant="flat">

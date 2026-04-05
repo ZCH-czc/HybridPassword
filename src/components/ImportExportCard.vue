@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 
 const props = defineProps({
   importStrategy: {
@@ -17,6 +18,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:importStrategy", "export", "import"]);
+const { t } = useAppPreferences();
 const localStrategy = ref(props.importStrategy);
 
 watch(
@@ -33,20 +35,20 @@ watch(localStrategy, (value) => {
 
 <template>
   <v-card class="border-sm">
-    <v-card-title>导入与导出</v-card-title>
+    <v-card-title>{{ t("settings.importExport") }}</v-card-title>
 
     <v-card-text>
-      <div class="text-body-2 text-medium-emphasis mb-2">CSV 冲突策略</div>
+      <div class="text-body-2 text-medium-emphasis mb-2">{{ t("settings.importStrategy") }}</div>
 
       <v-radio-group v-model="localStrategy" hide-details density="comfortable">
-        <v-radio label="按用户名覆盖已有记录" value="overwrite" />
-        <v-radio label="按用户名跳过重复记录" value="skip" />
+        <v-radio :label="t('settings.importOverwrite')" value="overwrite" />
+        <v-radio :label="t('settings.importSkip')" value="skip" />
       </v-radio-group>
 
       <v-sheet class="mt-4 rounded-xl px-4 py-3 bg-surface-variant text-body-2 text-medium-emphasis">
-        <div>多条备注会使用 <code>|</code> 连接保存。</div>
+        <div>{{ t("settings.importExportHint") }}</div>
         <div class="mt-1">
-          {{ nativeFileDialogsAvailable ? "当前会调用系统文件管理器。" : "浏览器调试环境会使用网页文件选择与下载。" }}
+          {{ nativeFileDialogsAvailable ? t("settings.importExportNativeHint") : t("settings.importExportBrowserHint") }}
         </div>
       </v-sheet>
 
@@ -57,7 +59,7 @@ watch(localStrategy, (value) => {
           :disabled="busy"
           @click="emit('export', 'csv')"
         >
-          导出 CSV
+          {{ t("settings.exportCsv") }}
         </v-btn>
         <v-btn
           variant="tonal"
@@ -65,7 +67,7 @@ watch(localStrategy, (value) => {
           :disabled="busy"
           @click="emit('export', 'txt')"
         >
-          导出 TXT
+          {{ t("settings.exportTxt") }}
         </v-btn>
         <v-btn
           color="primary"
@@ -73,7 +75,7 @@ watch(localStrategy, (value) => {
           :loading="busy"
           @click="emit('import', localStrategy)"
         >
-          导入 CSV
+          {{ t("settings.importCsv") }}
         </v-btn>
       </div>
     </v-card-text>

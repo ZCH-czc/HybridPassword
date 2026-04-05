@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 import DeletedList from "@/components/DeletedList.vue";
 import ImportExportCard from "@/components/ImportExportCard.vue";
 import LanSyncCard from "@/components/LanSyncCard.vue";
@@ -32,7 +33,15 @@ const props = defineProps({
   },
   themeMode: {
     type: String,
+    default: "system",
+  },
+  resolvedTheme: {
+    type: String,
     default: "light",
+  },
+  locale: {
+    type: String,
+    default: "zh-CN",
   },
   changingMasterPassword: {
     type: Boolean,
@@ -52,7 +61,7 @@ const props = defineProps({
   },
   biometricLabel: {
     type: String,
-    default: "生物识别",
+    default: "Biometrics",
   },
   biometricMessage: {
     type: String,
@@ -150,7 +159,8 @@ const emit = defineEmits([
   "export",
   "import",
   "lock",
-  "toggle-theme",
+  "update-theme-mode",
+  "update-language",
   "change-master-password",
   "enable-biometric",
   "disable-biometric",
@@ -168,24 +178,57 @@ const emit = defineEmits([
   "permanent-delete",
 ]);
 
+const { t, themeModeOptions, localeOptions } = useAppPreferences();
+
+const languageChoiceOptions = computed(() => [
+  {
+    value: "zh-CN",
+    title: localeOptions.value.find((item) => item.value === "zh-CN")?.title || "简体中文",
+    icon: "mdi-ideogram-cjk-variant",
+  },
+  {
+    value: "en-US",
+    title: localeOptions.value.find((item) => item.value === "en-US")?.title || "English",
+    icon: "mdi-alphabetical-variant",
+  },
+]);
+
+const themeChoiceOptions = computed(() => [
+  {
+    value: "system",
+    title: themeModeOptions.value.find((item) => item.value === "system")?.title || t("settings.appearance.theme.system"),
+    icon: "mdi-theme-light-dark",
+  },
+  {
+    value: "light",
+    title: themeModeOptions.value.find((item) => item.value === "light")?.title || t("settings.appearance.theme.light"),
+    icon: "mdi-white-balance-sunny",
+  },
+  {
+    value: "dark",
+    title: themeModeOptions.value.find((item) => item.value === "dark")?.title || t("settings.appearance.theme.dark"),
+    icon: "mdi-weather-night",
+  },
+]);
+
 const biometricDescription = computed(() => {
   if (!props.biometricSupported) {
-    return "当前宿主尚未接入生物识别。";
+    return t("settings.biometricNotIntegrated");
   }
 
   if (!props.biometricAvailable) {
-    return props.biometricMessage || `当前设备暂时无法使用${props.biometricLabel}。`;
+    return props.biometricMessage || t("settings.biometricUnavailable", { label: props.biometricLabel });
   }
 
   if (props.biometricEnabled) {
-    return `已启用${props.biometricLabel}，下次可以直接验证解锁。`;
+    return t("settings.biometricEnabledBody", { label: props.biometricLabel });
   }
 
-  return `启用后可直接使用${props.biometricLabel}解锁。`;
+  return t("settings.biometricDisabledBody", { label: props.biometricLabel });
 });
 
 const biometricActionLabel = computed(() =>
-  props.biometricEnabled ? "关闭生物识别" : "启用生物识别"
+  props.biometricEnabled ? t("settings.disableBiometric") : t("settings.enableBiometric")
 );
 
 const platformTitle = computed(() => {
@@ -197,8 +240,14 @@ const platformTitle = computed(() => {
     return "Android";
   }
 
-  return "宿主平台";
+  return "Host";
 });
+
+const resolvedThemeLabel = computed(() =>
+  props.resolvedTheme === "dark"
+    ? t("settings.appearance.resolved.dark")
+    : t("settings.appearance.resolved.light")
+);
 </script>
 
 <template>
@@ -206,24 +255,27 @@ const platformTitle = computed(() => {
     <v-card class="settings-header border-sm overflow-hidden">
       <v-card-text class="pa-6 pa-sm-7 d-flex flex-column flex-lg-row align-lg-center justify-space-between ga-4">
         <div>
-          <div class="text-h4 font-weight-medium">设置</div>
+          <div class="text-h4 font-weight-medium">{{ t("common.settings") }}</div>
           <div class="text-body-2 text-medium-emphasis mt-2">
-            已保存 {{ recordCount }}条，最近删除 {{ deletedItems.length }}条
+            {{ t("settings.headerDescription", { count: recordCount, deletedCount: deletedItems.length }) }}
           </div>
         </div>
 
         <div class="d-flex flex-wrap ga-2">
           <v-chip color="primary" variant="tonal">
-            {{ themeMode === "dark" ? "暗黑模式" : "浅色模式" }}
+            {{ localeOptions.find((item) => item.value === locale)?.title || locale }}
+          </v-chip>
+          <v-chip color="secondary" variant="tonal">
+            {{ resolvedThemeLabel }}
           </v-chip>
           <v-chip
             :color="biometricEnabled ? 'primary' : 'surface-variant'"
             :variant="biometricEnabled ? 'tonal' : 'flat'"
           >
-            {{ biometricEnabled ? "生物识别已启用" : "生物识别未启用" }}
+            {{ biometricEnabled ? t("common.enabled") : t("common.disabled") }}
           </v-chip>
           <v-btn color="primary" prepend-icon="mdi-lock-outline" @click="emit('lock')">
-            立即锁定
+            {{ t("common.lock") }}
           </v-btn>
         </div>
       </v-card-text>
@@ -232,44 +284,75 @@ const platformTitle = computed(() => {
     <v-row dense>
       <v-col cols="12" lg="6">
         <v-card class="border-sm h-100">
-          <v-card-title>外观</v-card-title>
-          <v-card-text>
-            <v-list class="bg-transparent pa-0">
-              <v-list-item rounded="xl">
-                <template #prepend>
-                  <v-avatar color="primary" variant="tonal" size="40">
-                    <v-icon>{{ themeMode === "dark" ? "mdi-weather-night" : "mdi-weather-sunny" }}</v-icon>
-                  </v-avatar>
-                </template>
+          <v-card-title>{{ t("settings.appearance") }}</v-card-title>
+          <v-card-text class="d-flex flex-column ga-4">
+            <v-sheet class="rounded-xl pa-3 settings-choice-shell">
+              <div class="text-subtitle-2 font-weight-medium px-2 pt-1 settings-choice-label">
+                {{ t("settings.language") }}
+              </div>
+              <v-btn-toggle
+                :model-value="locale"
+                class="settings-toggle mt-3"
+                mandatory
+                rounded="xl"
+                selected-class="settings-toggle__active"
+                @update:model-value="emit('update-language', $event)"
+              >
+                <v-btn
+                  v-for="item in languageChoiceOptions"
+                  :key="item.value"
+                  :value="item.value"
+                  class="settings-toggle__item"
+                  rounded="xl"
+                  variant="text"
+                >
+                  <v-icon :icon="item.icon" size="18" />
+                  <span>{{ item.title }}</span>
+                </v-btn>
+              </v-btn-toggle>
+            </v-sheet>
 
-                <v-list-item-title>暗黑模式</v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ themeMode === "dark" ? "当前为深色界面" : "当前为浅色界面" }}
-                </v-list-item-subtitle>
+            <v-sheet class="rounded-xl pa-3 settings-choice-shell">
+              <div class="text-subtitle-2 font-weight-medium px-2 pt-1 settings-choice-label">
+                {{ t("settings.appearance.themeMode") }}
+              </div>
+              <v-btn-toggle
+                :model-value="themeMode"
+                class="settings-toggle mt-3"
+                mandatory
+                rounded="xl"
+                selected-class="settings-toggle__active"
+                @update:model-value="emit('update-theme-mode', $event)"
+              >
+                <v-btn
+                  v-for="item in themeChoiceOptions"
+                  :key="item.value"
+                  :value="item.value"
+                  class="settings-toggle__item"
+                  rounded="xl"
+                  variant="text"
+                >
+                  <v-icon :icon="item.icon" size="18" />
+                  <span>{{ item.title }}</span>
+                </v-btn>
+              </v-btn-toggle>
+            </v-sheet>
 
-                <template #append>
-                  <v-switch
-                    :model-value="themeMode === 'dark'"
-                    color="primary"
-                    hide-details
-                    inset
-                    @update:model-value="emit('toggle-theme', $event)"
-                  />
-                </template>
-              </v-list-item>
-            </v-list>
+            <v-sheet class="rounded-xl px-4 py-3 bg-surface-variant text-body-2 text-medium-emphasis">
+              {{ t("settings.appearance.themeModeHint", { theme: resolvedThemeLabel }) }}
+            </v-sheet>
           </v-card-text>
         </v-card>
       </v-col>
 
       <v-col cols="12" lg="6">
         <v-card class="border-sm h-100">
-          <v-card-title>安全</v-card-title>
+          <v-card-title>{{ t("settings.security") }}</v-card-title>
           <v-card-text class="d-flex flex-column ga-4">
             <v-sheet class="rounded-xl pa-4 settings-block">
-              <div class="text-subtitle-1 font-weight-medium">修改主密码</div>
+              <div class="text-subtitle-1 font-weight-medium">{{ t("settings.changeMaster") }}</div>
               <div class="text-body-2 text-medium-emphasis mt-2">
-                修改后会用新的主密码重新保护现有数据。
+                {{ t("settings.changeMasterBody") }}
               </div>
               <v-btn
                 class="mt-4"
@@ -278,14 +361,14 @@ const platformTitle = computed(() => {
                 :loading="changingMasterPassword"
                 @click="emit('change-master-password')"
               >
-                修改主密码
+                {{ t("settings.changeMaster") }}
               </v-btn>
             </v-sheet>
 
             <v-sheet class="rounded-xl pa-4 settings-block">
               <div class="d-flex align-center justify-space-between flex-wrap ga-3">
                 <div>
-                  <div class="text-subtitle-1 font-weight-medium">生物识别解锁</div>
+                  <div class="text-subtitle-1 font-weight-medium">{{ t("settings.biometricUnlock") }}</div>
                   <div class="text-body-2 text-medium-emphasis mt-2">
                     {{ biometricDescription }}
                   </div>
@@ -295,7 +378,7 @@ const platformTitle = computed(() => {
                   :color="biometricEnabled ? 'primary' : 'surface-variant'"
                   :variant="biometricEnabled ? 'tonal' : 'flat'"
                 >
-                  {{ biometricEnabled ? "已启用" : "未启用" }}
+                  {{ biometricEnabled ? t("common.enabled") : t("common.disabled") }}
                 </v-chip>
               </div>
 
@@ -326,9 +409,9 @@ const platformTitle = computed(() => {
         <v-sheet v-if="supportsMinimizeToTray" class="rounded-xl pa-4 settings-block">
           <div class="d-flex align-center justify-space-between ga-4">
             <div>
-              <div class="text-subtitle-1 font-weight-medium">关闭窗口时收纳到托盘</div>
+              <div class="text-subtitle-1 font-weight-medium">{{ t("settings.windowsTray") }}</div>
               <div class="text-body-2 text-medium-emphasis mt-2">
-                仅在 Windows 上生效，关闭窗口时应用会隐藏到系统托盘。
+                {{ t("settings.windowsTrayBody") }}
               </div>
             </div>
 
@@ -346,9 +429,9 @@ const platformTitle = computed(() => {
         <v-sheet v-if="supportsLaunchAtStartup" class="rounded-xl pa-4 settings-block">
           <div class="d-flex align-center justify-space-between ga-4">
             <div>
-              <div class="text-subtitle-1 font-weight-medium">开机自启动</div>
+              <div class="text-subtitle-1 font-weight-medium">{{ t("settings.launchAtStartup") }}</div>
               <div class="text-body-2 text-medium-emphasis mt-2">
-                登录 Windows 后自动启动应用。
+                {{ t("settings.launchAtStartupBody") }}
               </div>
             </div>
 
@@ -366,9 +449,9 @@ const platformTitle = computed(() => {
         <v-sheet v-if="supportsExcludeFromRecents" class="rounded-xl pa-4 settings-block">
           <div class="d-flex align-center justify-space-between ga-4">
             <div>
-              <div class="text-subtitle-1 font-weight-medium">不在最近任务中显示</div>
+              <div class="text-subtitle-1 font-weight-medium">{{ t("settings.excludeFromRecents") }}</div>
               <div class="text-body-2 text-medium-emphasis mt-2">
-                开启后，Android 最近任务卡片中会隐藏当前应用。
+                {{ t("settings.excludeFromRecentsBody") }}
               </div>
             </div>
 
@@ -386,9 +469,9 @@ const platformTitle = computed(() => {
         <v-sheet v-if="supportsAutostartSettingsShortcut" class="rounded-xl pa-4 settings-block">
           <div class="d-flex flex-column flex-md-row align-md-center justify-space-between ga-4">
             <div>
-              <div class="text-subtitle-1 font-weight-medium">自启动与后台运行</div>
+              <div class="text-subtitle-1 font-weight-medium">{{ t("settings.autostartShortcut") }}</div>
               <div class="text-body-2 text-medium-emphasis mt-2">
-                Android 不同厂商的自启动入口不统一，这里会优先打开系统相关设置页。
+                {{ t("settings.autostartShortcutBody") }}
               </div>
             </div>
 
@@ -398,7 +481,7 @@ const platformTitle = computed(() => {
               :loading="autostartOpening"
               @click="emit('open-autostart-settings')"
             >
-              打开系统设置
+              {{ t("settings.openSystemSettings") }}
             </v-btn>
           </div>
         </v-sheet>
@@ -459,5 +542,51 @@ const platformTitle = computed(() => {
 
 .settings-block {
   background: rgba(var(--v-theme-surface), 0.62);
+}
+
+.settings-choice-shell {
+  background: rgba(var(--v-theme-surface), 0.58);
+}
+
+.settings-choice-label {
+  color: rgba(var(--v-theme-on-surface), 0.74);
+}
+
+.settings-toggle {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+  width: 100%;
+  height: auto !important;
+  overflow: visible !important;
+  align-items: stretch;
+  background: transparent !important;
+}
+
+.settings-toggle :deep(.v-btn) {
+  min-height: 64px;
+  height: auto !important;
+  justify-content: flex-start;
+  gap: 10px;
+  padding-inline: 16px;
+  text-transform: none;
+  color: rgb(var(--v-theme-on-surface));
+  background: rgba(var(--v-theme-surface), 0.76);
+  box-shadow: none;
+}
+
+.settings-toggle :deep(.settings-toggle__active) {
+  background: rgba(var(--v-theme-primary), 0.14);
+  color: rgb(var(--v-theme-primary));
+  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-primary), 0.18);
+}
+
+.settings-toggle :deep(.v-btn__content) {
+  justify-content: flex-start;
+  width: 100%;
+  font-weight: 500;
+  white-space: normal;
+  line-height: 1.3;
+  text-align: left;
 }
 </style>

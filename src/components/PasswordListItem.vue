@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 import { maskPassword } from "@/utils/password-generator";
 
 const props = defineProps({
@@ -44,16 +45,16 @@ const emit = defineEmits([
 ]);
 
 const notesExpanded = ref(false);
+const { t, formatDateTime } = useAppPreferences();
 
-const displayTitle = computed(() => props.item.siteName || "未命名项目");
+const displayTitle = computed(() => props.item.siteName || t("common.unnamedEntry"));
 const avatarLabel = computed(() => (displayTitle.value?.slice(0, 1) || "P").toUpperCase());
 const displayPassword = computed(() =>
   props.revealedPassword ? props.revealedPassword : maskPassword("placeholder")
 );
-
-function formatDate(timestamp) {
-  return new Date(timestamp).toLocaleString();
-}
+const notesLabel = computed(() =>
+  props.item.notes.length ? t("common.countNotes", { count: props.item.notes.length }) : t("item.noNotes")
+);
 </script>
 
 <template>
@@ -87,14 +88,14 @@ function formatDate(timestamp) {
                 color="primary"
                 variant="tonal"
               >
-                收藏
+                {{ t("item.favorite") }}
               </v-chip>
             </div>
             <div class="text-body-2 text-medium-emphasis text-truncate">
               {{ item.username }}
             </div>
             <div class="text-caption text-medium-emphasis mt-1">
-              更新于 {{ formatDate(item.updatedAt) }}
+              {{ t("item.updatedAt", { time: formatDateTime(item.updatedAt) }) }}
             </div>
           </div>
         </div>
@@ -118,7 +119,7 @@ function formatDate(timestamp) {
       </div>
 
       <v-sheet class="mt-4 pa-3 rounded-lg border-sm bg-surface-variant vault-inner-sheet">
-        <div class="text-caption text-medium-emphasis mb-1">密码</div>
+        <div class="text-caption text-medium-emphasis mb-1">{{ t("item.password") }}</div>
         <div class="password-line text-body-2">
           {{ displayPassword }}
         </div>
@@ -130,22 +131,22 @@ function formatDate(timestamp) {
             :loading="revealLoading"
             @click="emit('toggle-reveal', item.id)"
           >
-            {{ revealedPassword ? "隐藏明文" : "显示明文" }}
+            {{ revealedPassword ? t("item.hidePlain") : t("item.showPlain") }}
           </v-btn>
 
           <v-btn size="small" variant="text" @click="emit('copy-password', item.id)">
-            复制密码
+            {{ t("item.copyPassword") }}
           </v-btn>
 
           <v-btn size="small" variant="text" @click="emit('copy-username', item.username)">
-            复制用户名
+            {{ t("item.copyUsername") }}
           </v-btn>
         </div>
       </v-sheet>
 
       <div class="d-flex align-center justify-space-between mt-3">
         <div class="text-body-2 text-medium-emphasis">
-          {{ item.notes.length ? `共 ${item.notes.length}条备注` : "暂无备注" }}
+          {{ notesLabel }}
         </div>
 
         <v-btn
@@ -154,7 +155,7 @@ function formatDate(timestamp) {
           :disabled="!item.notes.length"
           @click="notesExpanded = !notesExpanded"
         >
-          {{ notesExpanded ? "收起备注" : "展开备注" }}
+          {{ notesExpanded ? t("item.collapseNotes") : t("item.expandNotes") }}
         </v-btn>
       </div>
 

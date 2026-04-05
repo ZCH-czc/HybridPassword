@@ -1,4 +1,6 @@
 <script setup>
+import { useAppPreferences } from "@/composables/useAppPreferences";
+
 const props = defineProps({
   modelValue: {
     type: Boolean,
@@ -31,21 +33,19 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:modelValue", "confirm"]);
+const { t, formatDateTime } = useAppPreferences();
 
 function formatPreview(preview) {
   if (!preview?.latestItem) {
-    return "暂无";
+    return t("common.none");
   }
 
-  return `${preview.latestItem.siteName} / ${preview.latestItem.username}`;
+  const siteName = preview.latestItem.siteName || t("common.unnamedEntry");
+  return `${siteName} / ${preview.latestItem.username}`;
 }
 
 function formatTime(preview) {
-  if (!preview?.latestItem?.createdAt) {
-    return "暂无";
-  }
-
-  return new Date(preview.latestItem.createdAt).toLocaleString();
+  return preview?.latestItem?.createdAt ? formatDateTime(preview.latestItem.createdAt) : t("common.none");
 }
 </script>
 
@@ -57,25 +57,26 @@ function formatTime(preview) {
     @update:model-value="emit('update:modelValue', $event)"
   >
     <v-card class="border-sm">
-      <v-card-title class="pt-6 px-6 text-h5">确认同步</v-card-title>
+      <v-card-title class="pt-6 px-6 text-h5">{{ t("syncConfirm.title") }}</v-card-title>
       <v-card-text class="px-6 pb-2">
         <div class="text-body-1">
-          你将使用 <strong>{{ sourceLabel }}</strong> 的数据覆盖当前设备。
+          {{ t("syncConfirm.description", { source: sourceLabel }) }}
         </div>
         <div class="text-body-2 text-medium-emphasis mt-2">
-          为了避免误同步，下面会同时显示两边最近新增的项目。确认后，本机会替换为来源设备的整库加密快照。
+          {{ t("syncConfirm.warning") }}
         </div>
 
         <v-row dense class="mt-4">
           <v-col cols="12" md="6">
             <v-sheet class="rounded-xl pa-4 sync-preview-card">
-              <div class="text-subtitle-1 font-weight-medium">当前设备</div>
+              <div class="text-subtitle-1 font-weight-medium">{{ t("common.currentDevice") }}</div>
               <div class="text-body-2 text-medium-emphasis mt-2">
-                已保存 {{ localPreview.totalCount }}条，最近删除 {{ localPreview.deletedCount }}条
+                {{ t("common.countItems", { count: localPreview.totalCount }) }},
+                {{ t("list.statusDeleted", { count: localPreview.deletedCount }) }}
               </div>
               <div class="text-body-1 mt-4">{{ formatPreview(localPreview) }}</div>
               <div class="text-caption text-medium-emphasis mt-2">
-                添加时间 {{ formatTime(localPreview) }}
+                {{ t("syncConfirm.addedAt", { time: formatTime(localPreview) }) }}
               </div>
             </v-sheet>
           </v-col>
@@ -84,11 +85,12 @@ function formatTime(preview) {
             <v-sheet class="rounded-xl pa-4 sync-preview-card">
               <div class="text-subtitle-1 font-weight-medium">{{ sourceLabel }}</div>
               <div class="text-body-2 text-medium-emphasis mt-2">
-                已保存 {{ remotePreview.totalCount }}条，最近删除 {{ remotePreview.deletedCount }}条
+                {{ t("common.countItems", { count: remotePreview.totalCount }) }},
+                {{ t("list.statusDeleted", { count: remotePreview.deletedCount }) }}
               </div>
               <div class="text-body-1 mt-4">{{ formatPreview(remotePreview) }}</div>
               <div class="text-caption text-medium-emphasis mt-2">
-                添加时间 {{ formatTime(remotePreview) }}
+                {{ t("syncConfirm.addedAt", { time: formatTime(remotePreview) }) }}
               </div>
             </v-sheet>
           </v-col>
@@ -101,7 +103,7 @@ function formatTime(preview) {
           :disabled="loading"
           @click="emit('update:modelValue', false)"
         >
-          取消
+          {{ t("common.cancel") }}
         </v-btn>
         <v-btn
           color="primary"
@@ -109,7 +111,7 @@ function formatTime(preview) {
           :loading="loading"
           @click="emit('confirm')"
         >
-          确认同步
+          {{ t("common.confirm") }}
         </v-btn>
       </v-card-actions>
     </v-card>

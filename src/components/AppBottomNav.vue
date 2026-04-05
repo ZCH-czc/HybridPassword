@@ -1,4 +1,6 @@
 <script setup>
+import { useAppPreferences } from "@/composables/useAppPreferences";
+
 defineProps({
   modelValue: {
     type: String,
@@ -7,6 +9,7 @@ defineProps({
 });
 
 const emit = defineEmits(["update:modelValue"]);
+const { t } = useAppPreferences();
 </script>
 
 <template>
@@ -19,17 +22,17 @@ const emit = defineEmits(["update:modelValue"]);
   >
     <v-btn value="home">
       <v-icon>mdi-home-variant-outline</v-icon>
-      <span>主页</span>
+      <span>{{ t("nav.home") }}</span>
     </v-btn>
 
     <v-btn value="list">
       <v-icon>mdi-format-list-bulleted</v-icon>
-      <span>列表</span>
+      <span>{{ t("nav.list") }}</span>
     </v-btn>
 
     <v-btn value="settings">
       <v-icon>mdi-cog-outline</v-icon>
-      <span>设置</span>
+      <span>{{ t("nav.settings") }}</span>
     </v-btn>
   </v-bottom-navigation>
 </template>

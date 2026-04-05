@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 
 const props = defineProps({
   modelValue: {
@@ -21,13 +22,14 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:modelValue", "confirm"]);
+const { t } = useAppPreferences();
 
 const targetLabel = computed(() => {
   if (props.count > 1) {
-    return `${props.count}条密码记录`;
+    return t("deleteDialog.multiTarget", { count: props.count });
   }
 
-  return props.title || "该密码记录";
+  return props.title || t("deleteDialog.singleTarget");
 });
 </script>
 
@@ -40,18 +42,18 @@ const targetLabel = computed(() => {
   >
     <v-card class="border-sm">
       <v-card-text class="pa-6">
-        <div class="text-h6 font-weight-medium">移入最近删除</div>
+        <div class="text-h6 font-weight-medium">{{ t("deleteDialog.title") }}</div>
         <div class="text-body-2 text-medium-emphasis mt-3">
-          你即将把
-          <span class="font-weight-medium">{{ targetLabel }}</span>
-          移入最近删除，之后仍然可以在列表或设置中的最近删除里恢复。
+          {{ t("deleteDialog.message", { target: targetLabel }) }}
         </div>
       </v-card-text>
 
       <v-card-actions class="px-6 pb-6">
         <v-spacer />
-        <v-btn variant="text" @click="emit('update:modelValue', false)">取消</v-btn>
-        <v-btn color="error" :loading="loading" @click="emit('confirm')">移入最近删除</v-btn>
+        <v-btn variant="text" @click="emit('update:modelValue', false)">{{ t("common.cancel") }}</v-btn>
+        <v-btn color="error" :loading="loading" @click="emit('confirm')">
+          {{ t("deleteDialog.confirm") }}
+        </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

@@ -1,5 +1,6 @@
 <script setup>
 import { reactive, ref, watch } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 
 const props = defineProps({
   modelValue: {
@@ -14,6 +15,7 @@ const props = defineProps({
 
 const emit = defineEmits(["update:modelValue", "submit"]);
 const formRef = ref(null);
+const { t } = useAppPreferences();
 
 const formState = reactive({
   currentPassphrase: "",
@@ -22,11 +24,11 @@ const formState = reactive({
   reveal: false,
 });
 
-const requiredRule = (value) => (!!String(value || "").trim() ? true : "该字段不能为空");
+const requiredRule = (value) => (!!String(value || "").trim() ? true : t("common.requiredField"));
 const minLengthRule = (value) =>
-  String(value || "").length >= 8 ? true : "主密码至少需要 8 位";
+  String(value || "").length >= 8 ? true : t("master.minLength");
 const confirmRule = (value) =>
-  value === formState.nextPassphrase ? true : "两次输入的新主密码不一致";
+  value === formState.nextPassphrase ? true : t("changeMaster.mismatch");
 
 async function handleSubmit() {
   const result = await formRef.value?.validate();
@@ -61,17 +63,17 @@ watch(
     @update:model-value="emit('update:modelValue', $event)"
   >
     <v-card class="change-master-card">
-      <v-card-title class="px-6 pt-6">修改主密码</v-card-title>
+      <v-card-title class="px-6 pt-6">{{ t("changeMaster.title") }}</v-card-title>
       <v-card-text class="px-6 pb-2">
         <div class="text-body-2 text-medium-emphasis mb-4">
-          新主密码至少 8 位，更新后会立即重新保护现有数据。
+          {{ t("changeMaster.description") }}
         </div>
 
         <v-form ref="formRef" @submit.prevent="handleSubmit">
           <v-text-field
             v-model="formState.currentPassphrase"
             :type="formState.reveal ? 'text' : 'password'"
-            label="当前主密码"
+            :label="t('changeMaster.current')"
             prepend-inner-icon="mdi-lock-outline"
             :rules="[requiredRule]"
           />
@@ -79,7 +81,7 @@ watch(
           <v-text-field
             v-model="formState.nextPassphrase"
             :type="formState.reveal ? 'text' : 'password'"
-            label="新主密码"
+            :label="t('changeMaster.next')"
             prepend-inner-icon="mdi-lock-reset"
             :append-inner-icon="formState.reveal ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
             :rules="[requiredRule, minLengthRule]"
@@ -89,7 +91,7 @@ watch(
           <v-text-field
             v-model="formState.confirmPassphrase"
             :type="formState.reveal ? 'text' : 'password'"
-            label="确认新主密码"
+            :label="t('changeMaster.confirm')"
             prepend-inner-icon="mdi-lock-check-outline"
             :rules="[requiredRule, confirmRule]"
           />
@@ -98,8 +100,10 @@ watch(
 
       <v-card-actions class="px-6 pb-6">
         <v-spacer />
-        <v-btn variant="text" @click="emit('update:modelValue', false)">取消</v-btn>
-        <v-btn color="primary" :loading="loading" @click="handleSubmit">更新主密码</v-btn>
+        <v-btn variant="text" @click="emit('update:modelValue', false)">{{ t("common.cancel") }}</v-btn>
+        <v-btn color="primary" :loading="loading" @click="handleSubmit">
+          {{ t("changeMaster.submit") }}
+        </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

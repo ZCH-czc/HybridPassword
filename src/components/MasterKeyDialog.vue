@@ -1,5 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 
 const props = defineProps({
   modelValue: {
@@ -20,7 +21,7 @@ const props = defineProps({
   },
   biometricLabel: {
     type: String,
-    default: "生物识别",
+    default: "Biometrics",
   },
   biometricLoading: {
     type: Boolean,
@@ -30,6 +31,7 @@ const props = defineProps({
 
 const emit = defineEmits(["submit", "biometric-unlock"]);
 const formRef = ref(null);
+const { t } = useAppPreferences();
 
 const formState = reactive({
   passphrase: "",
@@ -39,11 +41,11 @@ const formState = reactive({
 
 const isSetup = computed(() => props.mode === "setup");
 
-const requiredRule = (value) => (!!String(value || "").trim() ? true : "该字段不能为空");
+const requiredRule = (value) => (!!String(value || "").trim() ? true : t("common.requiredField"));
 const minLengthRule = (value) =>
-  String(value || "").length >= 8 ? true : "主密码至少需要 8 位";
+  String(value || "").length >= 8 ? true : t("master.minLength");
 const confirmRule = (value) =>
-  !isSetup.value || value === formState.passphrase ? true : "两次输入的主密码不一致";
+  !isSetup.value || value === formState.passphrase ? true : t("master.confirmMismatch");
 
 async function handleSubmit() {
   const result = await formRef.value?.validate();
@@ -80,14 +82,10 @@ watch(
             <v-icon size="30">mdi-shield-lock-outline</v-icon>
           </v-avatar>
           <div class="text-h5 font-weight-medium">
-            {{ isSetup ? "初始化主密码" : "解锁密码库" }}
+            {{ isSetup ? t("master.setupTitle") : t("master.unlockTitle") }}
           </div>
           <div class="text-body-2 text-medium-emphasis mt-2">
-            {{
-              isSetup
-                ? "主密码会保护当前设备上的密码库，请务必牢记。"
-                : "输入主密码后，应用会在本地临时解锁你的密码库。"
-            }}
+            {{ isSetup ? t("master.setupBody") : t("master.unlockBody") }}
           </div>
         </div>
 
@@ -95,7 +93,7 @@ watch(
           <v-text-field
             v-model="formState.passphrase"
             :type="formState.reveal ? 'text' : 'password'"
-            label="主密码"
+            :label="t('master.passphrase')"
             prepend-inner-icon="mdi-lock-outline"
             :append-inner-icon="formState.reveal ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
             :rules="[requiredRule, minLengthRule]"
@@ -106,7 +104,7 @@ watch(
             v-if="isSetup"
             v-model="formState.confirmPassphrase"
             :type="formState.reveal ? 'text' : 'password'"
-            label="确认主密码"
+            :label="t('master.confirmPassphrase')"
             prepend-inner-icon="mdi-lock-check-outline"
             :rules="[requiredRule, confirmRule]"
           />
@@ -119,7 +117,7 @@ watch(
             :loading="loading"
             @click="handleSubmit"
           >
-            {{ isSetup ? "创建并解锁" : "解锁" }}
+            {{ isSetup ? t("master.createAndUnlock") : t("common.unlock") }}
           </v-btn>
 
           <v-btn
@@ -132,7 +130,7 @@ watch(
             :loading="biometricLoading"
             @click="emit('biometric-unlock')"
           >
-            {{ `使用${biometricLabel}解锁` }}
+            {{ t("master.useBiometric", { label: biometricLabel }) }}
           </v-btn>
         </v-form>
       </v-card-text>

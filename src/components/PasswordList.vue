@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 import PasswordListItem from "@/components/PasswordListItem.vue";
 
 const props = defineProps({
@@ -52,6 +53,7 @@ const emit = defineEmits([
   "bulk-delete",
 ]);
 
+const { t } = useAppPreferences();
 const selectedCount = computed(() => props.selectedIds.length);
 const allSelected = computed(
   () => props.items.length > 0 && selectedCount.value === props.items.length
@@ -62,12 +64,12 @@ const selectedItems = computed(() => {
 });
 const bulkFavoriteLabel = computed(() => {
   if (!selectedItems.value.length) {
-    return "批量收藏";
+    return t("list.bulkFavorite");
   }
 
   return selectedItems.value.every((item) => item.isFavorite)
-    ? "取消收藏"
-    : "批量收藏";
+    ? t("list.bulkUnfavorite")
+    : t("list.bulkFavorite");
 });
 </script>
 
@@ -75,17 +77,17 @@ const bulkFavoriteLabel = computed(() => {
   <v-card class="border-sm">
     <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
       <div class="d-flex align-center ga-3">
-        <span>已保存的密码</span>
-        <v-chip color="primary" variant="tonal">{{ items.length }}条</v-chip>
+        <span>{{ t("list.savedPasswords") }}</span>
+        <v-chip color="primary" variant="tonal">{{ t("common.countItems", { count: items.length }) }}</v-chip>
         <v-chip v-if="selectionMode" variant="tonal" color="secondary">
-          已选 {{ selectedCount }}条
+          {{ t("list.selectedCount", { count: selectedCount }) }}
         </v-chip>
       </div>
 
       <div class="d-flex flex-wrap ga-2">
         <template v-if="selectionMode">
           <v-btn variant="text" :disabled="!items.length" @click="emit('select-all', !allSelected)">
-            {{ allSelected ? "取消全选" : "全选" }}
+            {{ allSelected ? t("list.unselectAll") : t("list.selectAll") }}
           </v-btn>
           <v-btn
             variant="text"
@@ -100,9 +102,11 @@ const bulkFavoriteLabel = computed(() => {
             :disabled="!selectedCount || bulkLoading"
             @click="emit('bulk-delete')"
           >
-            批量删除
+            {{ t("list.bulkDelete") }}
           </v-btn>
-          <v-btn variant="text" @click="emit('toggle-selection-mode', false)">完成</v-btn>
+          <v-btn variant="text" @click="emit('toggle-selection-mode', false)">
+            {{ t("list.complete") }}
+          </v-btn>
         </template>
 
         <v-btn
@@ -112,7 +116,7 @@ const bulkFavoriteLabel = computed(() => {
           :disabled="!items.length"
           @click="emit('toggle-selection-mode', true)"
         >
-          选择
+          {{ t("list.select") }}
         </v-btn>
       </div>
     </v-card-title>
@@ -120,9 +124,9 @@ const bulkFavoriteLabel = computed(() => {
     <v-card-text class="pa-4">
       <div v-if="!items.length" class="py-10 text-center">
         <v-icon size="44" color="medium-emphasis">mdi-folder-key-outline</v-icon>
-        <div class="text-h6 mt-3">没有匹配的密码记录</div>
+        <div class="text-h6 mt-3">{{ t("list.noResults") }}</div>
         <div class="text-body-2 text-medium-emphasis mt-2">
-          你可以新建密码，或调整顶部搜索条件。
+          {{ t("list.noResultsBody") }}
         </div>
       </div>
 

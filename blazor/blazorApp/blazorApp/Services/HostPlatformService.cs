@@ -1,5 +1,6 @@
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Storage;
+using System.IO;
 
 #if WINDOWS
 using System.Runtime.InteropServices;
@@ -48,6 +49,9 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
     private const uint TpmLeftAlign = 0x0000;
     private const uint TpmBottomAlign = 0x0020;
     private const uint TpmReturnCmd = 0x0100;
+    private const uint ImageIcon = 1;
+    private const uint LrLoadFromFile = 0x00000010;
+    private const uint LrDefaultSize = 0x00000040;
     private const int SwHide = 0;
     private const int SwRestore = 9;
     private const int RestoreMenuId = 2001;
@@ -58,9 +62,11 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
     private AppWindow? _appWindow;
     private IntPtr _windowHandle = IntPtr.Zero;
     private IntPtr _previousWindowProc = IntPtr.Zero;
+    private IntPtr _trayIconHandle = IntPtr.Zero;
     private TrayWindowProc? _trayWindowProc;
     private bool _trayIconVisible;
     private bool _exitRequested;
+    private bool _ownsTrayIconHandle;
 #endif
 
     public void AttachWindow(Microsoft.Maui.Controls.Window window)
@@ -170,6 +176,7 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
     {
 #if WINDOWS
         RemoveTrayIcon();
+        ReleaseTrayIconHandle();
         UnhookWindowProcedure();
 
         if (_appWindow is not null)
@@ -327,9 +334,60 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
             uID = TrayIconId,
             uFlags = NifMessage | NifIcon | NifTip,
             uCallbackMessage = TrayCallbackMessage,
-            hIcon = LoadIcon(IntPtr.Zero, IdiApplication),
+            hIcon = ResolveTrayIconHandle(),
             szTip = "Password Vault",
         };
+    }
+
+    private IntPtr ResolveTrayIconHandle()
+    {
+        if (_trayIconHandle != IntPtr.Zero)
+        {
+            return _trayIconHandle;
+        }
+
+        try
+        {
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "appicon.ico");
+            if (File.Exists(iconPath))
+            {
+                var loadedIcon = LoadImage(
+                    IntPtr.Zero,
+                    iconPath,
+                    ImageIcon,
+                    0,
+                    0,
+                    LrLoadFromFile | LrDefaultSize);
+
+                if (loadedIcon != IntPtr.Zero)
+                {
+                    _trayIconHandle = loadedIcon;
+                    _ownsTrayIconHandle = true;
+                    return _trayIconHandle;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        _trayIconHandle = LoadIcon(IntPtr.Zero, IdiApplication);
+        _ownsTrayIconHandle = false;
+        return _trayIconHandle;
+    }
+
+    private void ReleaseTrayIconHandle()
+    {
+        if (!_ownsTrayIconHandle || _trayIconHandle == IntPtr.Zero)
+        {
+            _trayIconHandle = IntPtr.Zero;
+            _ownsTrayIconHandle = false;
+            return;
+        }
+
+        DestroyIcon(_trayIconHandle);
+        _trayIconHandle = IntPtr.Zero;
+        _ownsTrayIconHandle = false;
     }
 
     private void ShowTrayMenu()
@@ -491,6 +549,18 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr LoadIcon(IntPtr hInstance, IntPtr lpIconName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadImage(
+        IntPtr hInst,
+        string lpszName,
+        uint uType,
+        int cxDesired,
+        int cyDesired,
+        uint fuLoad);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyIcon(IntPtr hIcon);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr CreatePopupMenu();

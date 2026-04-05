@@ -1,5 +1,6 @@
 <script setup>
 import { reactive, ref, watch } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 import {
   clonePasswordDraft,
   createEmptyPasswordDraft,
@@ -27,10 +28,11 @@ const props = defineProps({
 
 const emit = defineEmits(["update:modelValue", "save"]);
 const formRef = ref(null);
+const { t } = useAppPreferences();
 
 const localDraft = reactive(createEmptyPasswordDraft());
 
-const requiredRule = (value) => (!!String(value || "").trim() ? true : "该字段不能为空");
+const requiredRule = (value) => (!!String(value || "").trim() ? true : t("common.requiredField"));
 
 function syncDraft() {
   const draft = clonePasswordDraft(props.initialDraft);
@@ -110,7 +112,7 @@ watch(
   >
     <v-card class="border-sm">
       <v-card-title class="px-6 pt-6">
-        {{ localDraft.id ? "编辑密码" : "新建密码" }}
+        {{ localDraft.id ? t("editor.editTitle") : t("editor.createTitle") }}
       </v-card-title>
 
       <v-card-text class="px-6 pb-2">
@@ -119,7 +121,7 @@ watch(
             <v-col cols="12">
               <v-text-field
                 v-model="localDraft.siteName"
-                label="网站或应用（选填）"
+                :label="t('editor.siteName')"
                 prepend-inner-icon="mdi-web"
               />
             </v-col>
@@ -127,7 +129,7 @@ watch(
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="localDraft.username"
-                label="用户名"
+                :label="t('editor.username')"
                 prepend-inner-icon="mdi-account-outline"
                 :rules="[requiredRule]"
               />
@@ -136,7 +138,7 @@ watch(
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="localDraft.password"
-                label="密码"
+                :label="t('editor.password')"
                 prepend-inner-icon="mdi-form-textbox-password"
                 :rules="[requiredRule]"
                 type="text"
@@ -145,9 +147,9 @@ watch(
 
             <v-col cols="12">
               <div class="d-flex align-center justify-space-between mb-2">
-                <div class="text-subtitle-1 font-weight-medium">备注</div>
+                <div class="text-subtitle-1 font-weight-medium">{{ t("editor.notes") }}</div>
                 <v-btn size="small" variant="text" prepend-icon="mdi-plus" @click="addNote">
-                  新增备注
+                  {{ t("editor.addNote") }}
                 </v-btn>
               </div>
 
@@ -158,7 +160,7 @@ watch(
               >
                 <v-text-field
                   v-model="localDraft.notes[index]"
-                  :label="`备注 ${index + 1}`"
+                  :label="t('editor.noteLabel', { index: index + 1 })"
                   prepend-inner-icon="mdi-note-text-outline"
                   hide-details
                 />
@@ -174,8 +176,8 @@ watch(
 
       <v-card-actions class="px-6 pb-6">
         <v-spacer />
-        <v-btn variant="text" @click="emit('update:modelValue', false)">取消</v-btn>
-        <v-btn color="primary" :loading="loading" @click="handleSave">保存</v-btn>
+        <v-btn variant="text" @click="emit('update:modelValue', false)">{{ t("common.cancel") }}</v-btn>
+        <v-btn color="primary" :loading="loading" @click="handleSave">{{ t("common.save") }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

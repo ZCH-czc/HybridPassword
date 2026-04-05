@@ -1,5 +1,6 @@
 <script setup>
 import { reactive, watch } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 
 const props = defineProps({
   settings: {
@@ -26,6 +27,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["save", "upload", "download"]);
+const { t } = useAppPreferences();
 
 const form = reactive({
   baseUrl: "",
@@ -59,14 +61,14 @@ function emitSave() {
 <template>
   <v-card class="border-sm">
     <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
-      <span>WebDAV 同步</span>
-      <v-chip color="primary" variant="tonal">加密快照</v-chip>
+      <span>{{ t("settings.webDav") }}</span>
+      <v-chip color="primary" variant="tonal">{{ t("settings.encryptedSnapshot") }}</v-chip>
     </v-card-title>
 
     <v-card-text class="d-flex flex-column ga-4">
       <v-text-field
         v-model="form.baseUrl"
-        label="WebDAV 地址"
+        :label="t('settings.webDavUrl')"
         placeholder="https://example.com/dav/"
         variant="solo-filled"
         hide-details
@@ -75,7 +77,7 @@ function emitSave() {
 
       <v-text-field
         v-model="form.remotePath"
-        label="远端文件路径"
+        :label="t('settings.webDavPath')"
         placeholder="password-vault/snapshot.json"
         variant="solo-filled"
         hide-details
@@ -86,7 +88,7 @@ function emitSave() {
         <v-col cols="12" md="6">
           <v-text-field
             v-model="form.username"
-            label="用户名"
+            :label="t('settings.webDavUsername')"
             variant="solo-filled"
             hide-details
             :disabled="disabled"
@@ -96,7 +98,7 @@ function emitSave() {
         <v-col cols="12" md="6">
           <v-text-field
             v-model="form.password"
-            label="密码"
+            :label="t('settings.webDavPassword')"
             type="password"
             autocomplete="new-password"
             variant="solo-filled"
@@ -107,9 +109,9 @@ function emitSave() {
       </v-row>
 
       <v-sheet class="rounded-xl px-4 py-3 bg-surface-variant text-body-2 text-medium-emphasis">
-        <div>WebDAV 中保存的是加密快照，不会上传明文密码。</div>
+        <div>{{ t("settings.webDavHint") }}</div>
         <div class="mt-1">
-          {{ settings.hasPassword ? "当前已保存 WebDAV 密码，留空则保持不变。" : "如果服务端需要认证，请填写用户名和密码。" }}
+          {{ settings.hasPassword ? t("settings.webDavPasswordSaved") : t("settings.webDavPasswordEmpty") }}
         </div>
       </v-sheet>
 
@@ -121,7 +123,7 @@ function emitSave() {
           :disabled="disabled || transferring"
           @click="emitSave"
         >
-          保存配置
+          {{ t("settings.saveConfig") }}
         </v-btn>
         <v-btn
           variant="tonal"
@@ -130,7 +132,7 @@ function emitSave() {
           :disabled="disabled || saving"
           @click="emit('upload')"
         >
-          上传当前数据
+          {{ t("settings.uploadCurrentData") }}
         </v-btn>
         <v-btn
           variant="tonal"
@@ -139,7 +141,7 @@ function emitSave() {
           :disabled="disabled || saving"
           @click="emit('download')"
         >
-          从 WebDAV 拉取
+          {{ t("settings.downloadFromWebDav") }}
         </v-btn>
       </div>
     </v-card-text>

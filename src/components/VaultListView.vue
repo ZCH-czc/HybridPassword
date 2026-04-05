@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 import DeletedList from "@/components/DeletedList.vue";
 import PasswordList from "@/components/PasswordList.vue";
 
@@ -79,22 +80,27 @@ const emit = defineEmits([
   "bulk-delete",
 ]);
 
-const listModeItems = [
-  { title: "全部", value: "all" },
-  { title: "收藏夹", value: "favorites" },
-  { title: "最近删除", value: "deleted" },
-];
+const { t } = useAppPreferences();
+
+const listModeItems = computed(() => [
+  { title: t("list.tabAll"), value: "all" },
+  { title: t("list.tabFavorites"), value: "favorites" },
+  { title: t("list.tabDeleted"), value: "deleted" },
+]);
 
 const statusText = computed(() => {
   if (props.listMode === "deleted") {
-    return `最近删除 ${props.deletedItems.length}条`;
+    return t("list.statusDeleted", { count: props.deletedItems.length });
   }
 
   if (props.searchText) {
-    return `搜索结果 ${props.items.length}条`;
+    return t("list.statusSearch", { count: props.items.length });
   }
 
-  return `共 ${props.totalCount}条，收藏 ${props.favoriteCount}条`;
+  return t("list.statusAll", {
+    total: props.totalCount,
+    favorite: props.favoriteCount,
+  });
 });
 </script>
 
@@ -103,7 +109,7 @@ const statusText = computed(() => {
     <v-card class="border-sm">
       <v-card-text class="pa-5 d-flex flex-column flex-lg-row align-lg-center justify-space-between ga-4">
         <div>
-          <div class="text-h5 font-weight-medium">全部项目</div>
+          <div class="text-h5 font-weight-medium">{{ t("list.title") }}</div>
           <div class="text-body-2 text-medium-emphasis mt-2">
             {{ statusText }}
           </div>

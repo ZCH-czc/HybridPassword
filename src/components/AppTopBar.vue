@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { useAppPreferences } from "@/composables/useAppPreferences";
 
 const props = defineProps({
   modelValue: {
@@ -17,11 +18,10 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:modelValue", "create", "lock"]);
+const { t } = useAppPreferences();
 
 const searchLabel = computed(() =>
-  props.currentView === "home"
-    ? "搜索密码、用户名或备注"
-    : "搜索全部项目或最近删除"
+  props.currentView === "home" ? t("search.homeLabel") : t("search.listLabel")
 );
 </script>
 
@@ -48,7 +48,7 @@ const searchLabel = computed(() =>
       :disabled="disabled"
       @click="emit('create')"
     >
-      新建
+      {{ t("common.create") }}
     </v-btn>
 
     <v-btn

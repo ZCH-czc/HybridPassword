@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { useTheme } from "vuetify";
+import { useLocale, useTheme } from "vuetify";
 import AppBottomNav from "@/components/AppBottomNav.vue";
 import AppSnackbar from "@/components/AppSnackbar.vue";
 import AppTopBar from "@/components/AppTopBar.vue";
@@ -13,6 +13,10 @@ import SyncConfirmDialog from "@/components/SyncConfirmDialog.vue";
 import VaultHomeView from "@/components/VaultHomeView.vue";
 import VaultListView from "@/components/VaultListView.vue";
 import VaultSettingsView from "@/components/VaultSettingsView.vue";
+import {
+  getDefaultLocale,
+  useAppPreferences,
+} from "@/composables/useAppPreferences";
 import { usePasswordVault } from "@/composables/usePasswordVault";
 import { createEmptyPasswordDraft } from "@/models/password-item";
 import {
@@ -46,7 +50,17 @@ import { parseEncryptedVaultSnapshot } from "@/utils/vault-sync";
 import { getAppSettingsRecord, saveAppSettingsRecord } from "@/utils/indexed-db";
 
 const theme = useTheme();
+const vuetifyLocale = useLocale();
 const vault = usePasswordVault();
+const {
+  state: preferences,
+  t,
+  setLocale,
+  setThemeMode,
+  setSystemPrefersDark,
+  getVuetifyLocale,
+  resolvedTheme,
+} = useAppPreferences();
 
 const currentView = ref("home");
 const listMode = ref("all");
@@ -64,9 +78,9 @@ const passwordInjection = ref({
 const pendingDeleteIds = ref([]);
 const pendingDeleteTitle = ref("");
 const pendingLanPublishTimer = ref(null);
+let colorSchemeMediaQuery = null;
 
 const settings = reactive({
-  themeMode: "light",
   onboardingCompleted: false,
 });
 
@@ -80,7 +94,7 @@ const host = reactive({
   isBiometricAvailable: false,
   isBiometricEnabled: false,
   supportsNativeFileDialogs: false,
-  biometricLabel: "生物识别",
+  biometricLabel: "Biometrics",
   platform: "web",
   message: "",
   safeAreaTop: 0,
@@ -254,9 +268,25 @@ function notify(text, color = "success") {
   snackbar.show = true;
 }
 
-function applyTheme(mode) {
-  settings.themeMode = mode === "dark" ? "dark" : "light";
-  theme.global.name.value = settings.themeMode;
+function applyResolvedTheme() {
+  theme.global.name.value = resolvedTheme.value;
+  document.documentElement.dataset.themeMode = resolvedTheme.value;
+}
+
+function applyLocalePreference(localeCode) {
+  const nextLocale = localeCode || getDefaultLocale();
+  setLocale(nextLocale);
+  vuetifyLocale.current.value = getVuetifyLocale(nextLocale);
+}
+
+function applyThemeModePreference(themeMode) {
+  setThemeMode(themeMode || "system");
+  applyResolvedTheme();
+}
+
+function updateSystemThemePreference(prefersDark) {
+  setSystemPrefersDark(prefersDark);
+  applyResolvedTheme();
 }
 
 function applySafeAreaInsets(top, bottom) {
@@ -269,7 +299,8 @@ function applySafeAreaInsets(top, bottom) {
 
 async function persistSettings() {
   await saveAppSettingsRecord({
-    themeMode: settings.themeMode,
+    themeMode: preferences.themeMode,
+    locale: preferences.locale,
     onboardingCompleted: settings.onboardingCompleted,
   });
 }
@@ -277,10 +308,12 @@ async function persistSettings() {
 async function loadAppSettings() {
   try {
     const record = await getAppSettingsRecord();
-    applyTheme(record?.themeMode || "light");
+    applyLocalePreference(record?.locale || getDefaultLocale());
+    applyThemeModePreference(record?.themeMode || "system");
     settings.onboardingCompleted = Boolean(record?.onboardingCompleted);
   } catch {
-    applyTheme("light");
+    applyLocalePreference(getDefaultLocale());
+    applyThemeModePreference("system");
   }
 }
 
@@ -361,11 +394,11 @@ async function publishCurrentLanSnapshot(silent = true) {
     });
 
     if (!result.success && !silent) {
-      notify(result.message || "发布局域网同步数据失败。", "warning");
+      notify(result.message || t("notify.lanPublishFailed"), "warning");
     }
   } catch (error) {
     if (!silent) {
-      notify(error.message || "发布局域网同步数据失败。", "warning");
+      notify(error.message || t("notify.lanPublishFailed"), "warning");
     }
   }
 }
@@ -381,7 +414,7 @@ async function unlockVaultWithPassphrase(passphrase) {
 
     return true;
   } catch (error) {
-    notify(error.message || "解锁失败。", "error");
+    notify(error.message || t("notify.unlockFailed"), "error");
     return false;
   }
 }
@@ -396,17 +429,14 @@ async function handleBiometricUnlock() {
   try {
     const result = await unlockWithBiometric();
     if (!result.success || !result.masterPassword) {
-      notify(result.message || `无法使用${host.biometricLabel}解锁。`, "warning");
+      notify(result.message || t("notify.biometricUnavailable", { label: host.biometricLabel }), "warning");
       await refreshHostState();
       return;
     }
 
     const success = await unlockVaultWithPassphrase(result.masterPassword);
     if (!success) {
-      notify(
-        "设备验证已通过，但宿主中保存的主密码已经失效，请手动输入主密码后重新启用生物识别。",
-        "warning"
-      );
+      notify(t("notify.biometricStoredPasswordExpired"), "warning");
     }
   } finally {
     busy.biometricUnlocking = false;
@@ -431,7 +461,7 @@ async function handleEditRecord(recordId) {
     editorDraft.value = await vault.buildEditableDraft(recordId);
     editorVisible.value = true;
   } catch (error) {
-    notify(error.message || "读取待编辑数据失败。", "error");
+    notify(error.message || t("notify.readDraftFailed"), "error");
   } finally {
     delete itemLoadingState.editingIds[recordId];
   }
@@ -445,9 +475,9 @@ async function handleSaveDraft(draft) {
     await vault.saveDraft(draft);
     editorVisible.value = false;
     editorDraft.value = createEmptyPasswordDraft();
-    notify(existed ? "密码记录已更新。" : "密码记录已创建。");
+    notify(existed ? t("notify.recordUpdated") : t("notify.recordCreated"));
   } catch (error) {
-    notify(error.message || "保存失败。", "error");
+    notify(error.message || t("notify.saveFailed"), "error");
   } finally {
     busy.saving = false;
   }
@@ -464,7 +494,7 @@ async function handleToggleReveal(recordId) {
   try {
     await vault.decryptPasswordById(recordId);
   } catch (error) {
-    notify(error.message || "密码解密失败。", "error");
+    notify(error.message || t("notify.decryptFailed"), "error");
   } finally {
     delete itemLoadingState.revealingIds[recordId];
   }
@@ -476,7 +506,7 @@ async function handleToggleFavorite(recordId) {
   try {
     await vault.toggleFavorite(recordId);
   } catch (error) {
-    notify(error.message || "更新收藏状态失败。", "error");
+    notify(error.message || t("notify.favoriteFailed"), "error");
   } finally {
     delete itemLoadingState.favoriteIds[recordId];
   }
@@ -486,18 +516,18 @@ async function handleCopyPassword(recordId) {
   try {
     const plainPassword = await vault.decryptPasswordById(recordId);
     await copyTextToClipboard(plainPassword);
-    notify("密码已复制到剪贴板。");
+    notify(t("notify.passwordCopied"));
   } catch (error) {
-    notify(error.message || "复制密码失败，请检查剪贴板权限。", "warning");
+    notify(error.message || t("notify.copyPasswordFailed"), "warning");
   }
 }
 
 async function handleCopyUsername(username) {
   try {
     await copyTextToClipboard(username);
-    notify("用户名已复制到剪贴板。");
+    notify(t("notify.usernameCopied"));
   } catch (error) {
-    notify(error.message || "复制用户名失败，请检查剪贴板权限。", "warning");
+    notify(error.message || t("notify.copyUsernameFailed"), "warning");
   }
 }
 
@@ -528,10 +558,10 @@ async function handleConfirmDelete() {
   try {
     if (pendingDeleteIds.value.length === 1) {
       await vault.removeRecord(pendingDeleteIds.value[0]);
-      notify("密码记录已移入最近删除。");
+      notify(t("notify.deleted"));
     } else {
       await vault.removeRecords(pendingDeleteIds.value);
-      notify(`${pendingDeleteIds.value.length}条密码记录已移入最近删除。`);
+      notify(t("notify.deletedMany", { count: pendingDeleteIds.value.length }));
     }
 
     deleteDialogVisible.value = false;
@@ -539,7 +569,7 @@ async function handleConfirmDelete() {
     pendingDeleteTitle.value = "";
     resetSelection();
   } catch (error) {
-    notify(error.message || "删除失败。", "error");
+    notify(error.message || t("notify.deleteFailed"), "error");
   } finally {
     busy.deleting = false;
   }
@@ -550,9 +580,9 @@ async function handleRestoreDeleted(recordId) {
 
   try {
     await vault.restoreRecord(recordId);
-    notify("密码记录已恢复。");
+    notify(t("notify.restored"));
   } catch (error) {
-    notify(error.message || "恢复失败。", "error");
+    notify(error.message || t("notify.restoreFailed"), "error");
   } finally {
     delete itemLoadingState.deletedBusyIds[recordId];
   }
@@ -563,9 +593,9 @@ async function handlePermanentDelete(recordId) {
 
   try {
     await vault.permanentlyDeleteRecord(recordId);
-    notify("密码记录已彻底删除。");
+    notify(t("notify.permanentlyDeleted"));
   } catch (error) {
-    notify(error.message || "彻底删除失败。", "error");
+    notify(error.message || t("notify.permanentDeleteFailed"), "error");
   } finally {
     delete itemLoadingState.deletedBusyIds[recordId];
   }
@@ -594,17 +624,17 @@ async function handleExport(format) {
       }
 
       if (!result.success) {
-        throw new Error(result.message || "调用宿主保存文件失败。");
+        throw new Error(result.message || t("notify.exportFailed"));
       }
 
-      notify(`${format.toUpperCase()} 已保存。`);
+      notify(t("notify.exportSaved", { format: format.toUpperCase() }));
       return;
     }
 
     downloadBlobFile(fileName, content, mimeType);
-    notify(`${format.toUpperCase()} 导出成功。`);
+    notify(t("notify.exportSuccess", { format: format.toUpperCase() }));
   } catch (error) {
-    notify(error.message || "导出失败。", "error");
+    notify(error.message || t("notify.exportFailed"), "error");
   } finally {
     busy.exporting = false;
   }
@@ -623,7 +653,7 @@ async function handleImport(strategy) {
       }
 
       if (!result.success) {
-        throw new Error(result.message || "调用宿主选择文件失败。");
+        throw new Error(result.message || t("notify.importFailed"));
       }
 
       text = result.content;
@@ -635,15 +665,14 @@ async function handleImport(strategy) {
     }
 
     const importResult = await vault.importEntriesFromCsvText(text, strategy);
-    notify(
-      `导入完成：新增 ${importResult.created}条，覆盖 ${importResult.updated}条，跳过 ${importResult.skipped}条。`
-    );
+    notify(t("notify.importDone", importResult));
   } catch (error) {
-    if (error.message === "已取消选择文件。") {
+    const normalizedMessage = String(error?.message || "").toLowerCase();
+    if (error.message === "已取消选择文件。" || normalizedMessage.includes("cancel")) {
       return;
     }
 
-    notify(error.message || "CSV 导入失败。", "error");
+    notify(error.message || t("notify.importFailed"), "error");
   } finally {
     busy.importing = false;
   }
@@ -664,9 +693,9 @@ function applyGeneratedPassword(password) {
 async function copyGeneratedPassword(password) {
   try {
     await copyTextToClipboard(password);
-    notify("随机密码已复制到剪贴板。");
+    notify(t("notify.generatedCopied"));
   } catch (error) {
-    notify(error.message || "复制随机密码失败。", "warning");
+    notify(error.message || t("notify.generatedCopyFailed"), "warning");
   }
 }
 
@@ -712,23 +741,32 @@ async function handleBulkFavorite() {
     await vault.setFavoriteRecords(selection.ids, shouldFavorite);
     notify(
       shouldFavorite
-        ? `已收藏 ${selection.ids.length}条记录。`
-        : `已取消收藏 ${selection.ids.length}条记录。`
+        ? t("notify.bulkFavorite", { count: selection.ids.length })
+        : t("notify.bulkUnfavorite", { count: selection.ids.length })
     );
     resetSelection();
   } catch (error) {
-    notify(error.message || "批量收藏失败。", "error");
+    notify(error.message || t("notify.bulkFavoriteFailed"), "error");
   } finally {
     busy.bulkActing = false;
   }
 }
 
-async function handleToggleTheme(enabled) {
+async function handleUpdateThemeMode(mode) {
   try {
-    applyTheme(enabled ? "dark" : "light");
+    applyThemeModePreference(mode);
     await persistSettings();
   } catch {
-    notify("主题切换失败。", "error");
+    notify(t("notify.themeFailed"), "error");
+  }
+}
+
+async function handleUpdateLanguage(localeCode) {
+  try {
+    applyLocalePreference(localeCode);
+    await persistSettings();
+  } catch {
+    notify(t("notify.languageFailed"), "error");
   }
 }
 
@@ -738,13 +776,13 @@ async function handleCompleteOnboarding() {
   try {
     await persistSettings();
   } catch {
-    notify("保存新手指引状态失败。", "warning");
+    notify(t("notify.onboardingSaveFailed"), "warning");
   }
 }
 
 async function handleEnableBiometricUnlock() {
   if (!session.masterPassphrase) {
-    notify("请先手动输入主密码解锁一次，再启用生物识别。", "info");
+    notify(t("notify.enterMasterPasswordFirst"), "info");
     return;
   }
 
@@ -755,11 +793,11 @@ async function handleEnableBiometricUnlock() {
     await refreshHostState();
 
     if (!result.success) {
-      notify(result.message || `无法启用${host.biometricLabel}。`, "warning");
+      notify(result.message || t("notify.biometricEnableFailed"), "warning");
       return;
     }
 
-    notify(result.message || `${host.biometricLabel}已启用。`);
+    notify(result.message || t("notify.biometricEnabled"));
   } finally {
     busy.biometricConfiguring = false;
   }
@@ -773,11 +811,11 @@ async function handleDisableBiometricUnlock() {
     await refreshHostState();
 
     if (!result.success) {
-      notify(result.message || "关闭生物识别失败。", "warning");
+      notify(result.message || t("notify.biometricDisableFailed"), "warning");
       return;
     }
 
-    notify(result.message || "生物识别解锁已关闭。");
+    notify(result.message || t("notify.biometricDisabled"));
   } finally {
     busy.biometricConfiguring = false;
   }
@@ -793,18 +831,15 @@ async function handleChangeMasterPassword(payload) {
     if (host.isBiometricEnabled) {
       const syncResult = await updateStoredMasterPassword(payload.nextPassphrase);
       if (!syncResult.success) {
-        notify(
-          syncResult.message || "主密码已更新，但宿主中的生物识别凭据同步失败。",
-          "warning"
-        );
+        notify(syncResult.message || t("notify.masterPasswordSyncWarning"), "warning");
       }
     }
 
     await refreshHostState();
     changeMasterPasswordVisible.value = false;
-    notify("主密码已更新。");
+    notify(t("notify.masterPasswordUpdated"));
   } catch (error) {
-    notify(error.message || "修改主密码失败。", "error");
+    notify(error.message || t("notify.masterPasswordChangeFailed"), "error");
   } finally {
     busy.changingMasterPassword = false;
   }
@@ -818,11 +853,11 @@ async function handleToggleMinimizeToTray(enabled) {
     await refreshHostState();
 
     if (!result.success) {
-      notify(result.message || "更新托盘设置失败。", "warning");
+      notify(result.message || t("notify.minimizeToTrayFailed"), "warning");
       return;
     }
 
-    notify(result.message || "托盘设置已更新。");
+    notify(result.message || t("notify.minimizeToTrayUpdated"));
   } finally {
     busy.platformSettings = false;
   }
@@ -836,11 +871,11 @@ async function handleToggleLaunchAtStartup(enabled) {
     await refreshHostState();
 
     if (!result.success) {
-      notify(result.message || "更新开机自启动失败。", "warning");
+      notify(result.message || t("notify.launchAtStartupFailed"), "warning");
       return;
     }
 
-    notify(result.message || "开机自启动设置已更新。");
+    notify(result.message || t("notify.launchAtStartupUpdated"));
   } finally {
     busy.platformSettings = false;
   }
@@ -854,11 +889,11 @@ async function handleToggleExcludeFromRecents(enabled) {
     await refreshHostState();
 
     if (!result.success) {
-      notify(result.message || "更新最近任务设置失败。", "warning");
+      notify(result.message || t("notify.excludeFromRecentsFailed"), "warning");
       return;
     }
 
-    notify(result.message || "最近任务设置已更新。");
+    notify(result.message || t("notify.excludeFromRecentsUpdated"));
   } finally {
     busy.platformSettings = false;
   }
@@ -870,11 +905,11 @@ async function handleOpenAutostartSettings() {
   try {
     const result = await openAutostartSettings();
     if (!result.success) {
-      notify(result.message || "打开系统设置失败。", "warning");
+      notify(result.message || t("notify.openSystemSettingsFailed"), "warning");
       return;
     }
 
-    notify(result.message || "已打开系统设置。");
+    notify(result.message || t("notify.openSystemSettingsSuccess"));
   } finally {
     busy.autostartOpening = false;
   }
@@ -888,11 +923,11 @@ async function handleSaveWebDavSettings(payload) {
     await loadSyncSettings();
 
     if (!result.success) {
-      notify(result.message || "保存 WebDAV 配置失败。", "warning");
+      notify(result.message || t("notify.webDavSaveFailed"), "warning");
       return;
     }
 
-    notify(result.message || "WebDAV 配置已保存。");
+    notify(result.message || t("notify.webDavSaved"));
   } finally {
     busy.webDavSaving = false;
   }
@@ -915,13 +950,13 @@ async function handleUploadWebDav() {
     const result = await uploadSnapshotToWebDavWithHost(current.text);
 
     if (!result.success) {
-      notify(result.message || "上传到 WebDAV 失败。", "warning");
+      notify(result.message || t("notify.webDavUploadFailed"), "warning");
       return;
     }
 
-    notify(result.message || "当前数据已上传到 WebDAV。");
+    notify(result.message || t("notify.webDavUploaded"));
   } catch (error) {
-    notify(error.message || "上传到 WebDAV 失败。", "error");
+    notify(error.message || t("notify.webDavUploadFailed"), "error");
   } finally {
     busy.webDavTransferring = false;
   }
@@ -933,13 +968,13 @@ async function handleDownloadWebDav() {
   try {
     const result = await downloadSnapshotFromWebDavWithHost();
     if (!result.success) {
-      notify(result.message || "从 WebDAV 拉取失败。", "warning");
+      notify(result.message || t("notify.webDavDownloadFailed"), "warning");
       return;
     }
 
     openSyncConfirmation(result.content, "WebDAV");
   } catch (error) {
-    notify(error.message || "从 WebDAV 拉取失败。", "error");
+    notify(error.message || t("notify.webDavDownloadFailed"), "error");
   } finally {
     busy.webDavTransferring = false;
   }
@@ -953,12 +988,12 @@ async function handleSaveDeviceName(deviceName) {
     await loadSyncSettings();
 
     if (!result.success) {
-      notify(result.message || "保存设备名称失败。", "warning");
+      notify(result.message || t("notify.deviceNameSaveFailed"), "warning");
       return;
     }
 
     await publishCurrentLanSnapshot(false);
-    notify(result.message || "设备名称已更新。");
+    notify(result.message || t("notify.deviceNameSaved"));
   } finally {
     busy.lanSavingDeviceName = false;
   }
@@ -970,7 +1005,7 @@ async function handleScanLanDevices() {
   try {
     syncState.lanDevices = await scanLanDevicesWithHost();
     if (!syncState.lanDevices.length) {
-      notify("没有扫描到可用设备。", "info");
+      notify(t("notify.noLanDevices"), "info");
     }
   } finally {
     busy.lanScanning = false;
@@ -983,13 +1018,13 @@ async function handleSyncLanDevice(device) {
   try {
     const result = await downloadLanSnapshotWithHost(device);
     if (!result.success) {
-      notify(result.message || "从局域网设备拉取失败。", "warning");
+      notify(result.message || t("notify.lanDownloadFailed"), "warning");
       return;
     }
 
-    openSyncConfirmation(result.content, device.deviceName || "目标设备");
+    openSyncConfirmation(result.content, device.deviceName || t("common.sourceDevice"));
   } catch (error) {
-    notify(error.message || "从局域网设备拉取失败。", "error");
+    notify(error.message || t("notify.lanDownloadFailed"), "error");
   } finally {
     busy.webDavTransferring = false;
   }
@@ -1012,16 +1047,16 @@ async function handleConfirmSync() {
         await vault.submitMasterPassword(currentPassphrase);
         session.masterPassphrase = currentPassphrase;
         await publishCurrentLanSnapshot(true);
-        notify("同步完成，已使用当前主密码重新解锁。");
+        notify(t("notify.syncCompletedUnlocked"));
         return;
       } catch {
         session.masterPassphrase = "";
       }
     }
 
-    notify("同步完成，请使用同步来源设备的主密码重新解锁。", "warning");
+    notify(t("notify.syncCompletedRelocked"), "warning");
   } catch (error) {
-    notify(error.message || "同步失败。", "error");
+    notify(error.message || t("notify.syncFailed"), "error");
   } finally {
     busy.lanConfirming = false;
   }
@@ -1033,6 +1068,10 @@ function handleWindowResize() {
   }
 
   refreshHostState();
+}
+
+function handleColorSchemeChange(event) {
+  updateSystemThemePreference(event.matches);
 }
 
 watch(
@@ -1071,6 +1110,20 @@ watch(
 
 onMounted(async () => {
   window.addEventListener("resize", handleWindowResize, { passive: true });
+
+  if (typeof window.matchMedia === "function") {
+    colorSchemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    updateSystemThemePreference(colorSchemeMediaQuery.matches);
+
+    if (typeof colorSchemeMediaQuery.addEventListener === "function") {
+      colorSchemeMediaQuery.addEventListener("change", handleColorSchemeChange);
+    } else if (typeof colorSchemeMediaQuery.addListener === "function") {
+      colorSchemeMediaQuery.addListener(handleColorSchemeChange);
+    }
+  } else {
+    applyResolvedTheme();
+  }
+
   await loadAppSettings();
   await refreshHostState();
   await loadSyncSettings();
@@ -1078,12 +1131,20 @@ onMounted(async () => {
   try {
     await vault.bootstrapVault();
   } catch (error) {
-    notify(error.message || "初始化密码库失败。", "error");
+    notify(error.message || t("notify.vaultInitFailed"), "error");
   }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleWindowResize);
+
+  if (colorSchemeMediaQuery) {
+    if (typeof colorSchemeMediaQuery.removeEventListener === "function") {
+      colorSchemeMediaQuery.removeEventListener("change", handleColorSchemeChange);
+    } else if (typeof colorSchemeMediaQuery.removeListener === "function") {
+      colorSchemeMediaQuery.removeListener(handleColorSchemeChange);
+    }
+  }
 
   if (pendingLanPublishTimer.value) {
     clearTimeout(pendingLanPublishTimer.value);
@@ -1111,13 +1172,13 @@ onBeforeUnmount(() => {
             class="d-flex flex-column align-center justify-center py-16"
           >
             <v-progress-circular indeterminate color="primary" size="42" />
-            <div class="text-body-1 text-medium-emphasis mt-4">正在初始化密码库...</div>
+            <div class="text-body-1 text-medium-emphasis mt-4">{{ t("app.bootstrapping") }}</div>
           </div>
 
           <template v-else>
             <Transition name="vault-page" mode="out-in">
               <div
-                :key="`${currentView}-${listMode}-${settings.themeMode}`"
+                :key="`${currentView}-${listMode}-${preferences.themeMode}-${preferences.locale}`"
                 :class="shouldShowSearchBar ? 'mt-4' : 'mt-0'"
               >
                 <VaultHomeView
@@ -1179,7 +1240,9 @@ onBeforeUnmount(() => {
                   :deleted-busy-ids="itemLoadingState.deletedBusyIds"
                   :native-file-dialogs-available="host.supportsNativeFileDialogs"
                   :busy="busy.importing || busy.exporting || isLocked"
-                  :theme-mode="settings.themeMode"
+                  :theme-mode="preferences.themeMode"
+                  :resolved-theme="resolvedTheme"
+                  :locale="preferences.locale"
                   :changing-master-password="busy.changingMasterPassword"
                   :biometric-supported="host.isSupported"
                   :biometric-available="host.isBiometricAvailable"
@@ -1209,7 +1272,8 @@ onBeforeUnmount(() => {
                   @export="handleExport"
                   @import="handleImport"
                   @lock="handleLockVault"
-                  @toggle-theme="handleToggleTheme"
+                  @update-theme-mode="handleUpdateThemeMode"
+                  @update-language="handleUpdateLanguage"
                   @change-master-password="changeMasterPasswordVisible = true"
                   @enable-biometric="handleEnableBiometricUnlock"
                   @disable-biometric="handleDisableBiometricUnlock"
