@@ -2,10 +2,12 @@ import { computed, reactive } from "vue";
 
 const SUPPORTED_LOCALES = ["zh-CN", "en-US"];
 const SUPPORTED_THEME_MODES = ["system", "light", "dark"];
+const SUPPORTED_NAV_ALIGNMENTS = ["center", "left", "right"];
 
 const state = reactive({
   locale: "zh-CN",
   themeMode: "system",
+  navAlignment: "center",
   systemPrefersDark: false,
 });
 
@@ -637,6 +639,137 @@ Object.assign(messages["en-US"], {
   "notify.vaultInitFailed": "Unable to initialize the vault.",
 });
 
+Object.assign(messages["zh-CN"], {
+  "master.secretKey": "Secret Key",
+  "master.secretKeyRequired": "此保险库需要主密码和 Secret Key 一起解锁。",
+  "master.secretKeyHint": ({ hint }) => `当前提示：${hint}`,
+  "settings.sectionListHint": "选择一个分类进入二级设置页面。",
+  "settings.sectionAppearanceBody": "主题、语言与显示方式",
+  "settings.sectionSecurityBody": "主密码、生物识别与 Secret Key",
+  "settings.sectionSyncBody": "WebDAV、局域网设备与同步来源",
+  "settings.sectionDataBody": "导入导出、最近删除与数据整理",
+  "settings.sectionPlatformBody": "系统集成、自启动与窗口行为",
+  "settings.dataManagement": "数据管理",
+  "settings.platformIntegration": "平台集成",
+  "settings.biometricReauth.title": "定期重新输入主密码",
+  "settings.biometricReauth.body": "生物识别只负责解锁本机数据密钥。到期后需要再次手动输入主密码，才能继续使用生物识别。",
+  "settings.biometricReauth.24h": "24 小时",
+  "settings.biometricReauth.72h": "72 小时",
+  "settings.biometricReauth.1w": "1 周",
+  "settings.biometricReauth.1m": "1 个月",
+  "settings.biometricReauth.never": "永不",
+  "settings.secretKey": "Secret Key",
+  "settings.secretKeyBody": "Secret Key 是跨设备恢复和同步解锁所需的第二层密钥，请单独妥善保存。",
+  "settings.secretKeyHintTitle": "当前 Secret Key 提示",
+  "settings.revealSecretKey": "显示 Secret Key",
+  "settings.copySecretKey": "复制 Secret Key",
+  "notify.biometricKeySyncFailed": "已手动解锁，但宿主中的生物识别密钥状态没有同步成功。",
+  "notify.biometricManualUnlockRequired": "已到主密码复验时间，请先手动输入主密码一次。",
+  "notify.biometricStoredKeyInvalid": "本机保存的生物识别解锁密钥已失效，请手动解锁后重新启用生物识别。",
+  "notify.biometricReauthUpdated": "生物识别复验时间已更新。",
+  "notify.biometricReauthUpdateFailed": "更新生物识别复验时间失败。",
+  "notify.secretKeyCreated": "已生成新的 Secret Key，请尽快在设置中查看并妥善保存。",
+  "notify.unlockRequiredForSecretKey": "请先解锁后再查看 Secret Key。",
+  "notify.secretKeyRevealFailed": "显示 Secret Key 失败。",
+  "notify.secretKeyCopied": "Secret Key 已复制到剪贴板。",
+  "notify.secretKeyCopyFailed": "复制 Secret Key 失败，请检查剪贴板权限。",
+  "notify.syncCompletedRelockedRecovery": "同步已完成。当前设备已重新锁定，请使用来源设备的主密码和 Secret Key 重新解锁，并按需重新启用生物识别。",
+});
+
+Object.assign(messages["en-US"], {
+  "master.secretKey": "Secret Key",
+  "master.secretKeyRequired": "This vault requires both your master password and Secret Key.",
+  "master.secretKeyHint": ({ hint }) => `Hint: ${hint}`,
+  "settings.sectionListHint": "Choose a category to open its detail page.",
+  "settings.sectionAppearanceBody": "Theme, language, and display style",
+  "settings.sectionSecurityBody": "Master password, biometrics, and Secret Key",
+  "settings.sectionSyncBody": "WebDAV, LAN devices, and sync source",
+  "settings.sectionDataBody": "Import/export, recently deleted, and data cleanup",
+  "settings.sectionPlatformBody": "System integration, auto-start, and window behavior",
+  "settings.dataManagement": "Data management",
+  "settings.platformIntegration": "Platform integration",
+  "settings.biometricReauth.title": "Require master password again",
+  "settings.biometricReauth.body": "Biometrics only unlock the local device key. When the interval expires, you must manually enter the master password again before biometrics can keep unlocking the vault.",
+  "settings.biometricReauth.24h": "24 hours",
+  "settings.biometricReauth.72h": "72 hours",
+  "settings.biometricReauth.1w": "1 week",
+  "settings.biometricReauth.1m": "1 month",
+  "settings.biometricReauth.never": "Never",
+  "settings.secretKey": "Secret Key",
+  "settings.secretKeyBody": "The Secret Key is the second factor required for cross-device recovery and sync unlock. Store it separately from your master password.",
+  "settings.secretKeyHintTitle": "Current Secret Key hint",
+  "settings.revealSecretKey": "Reveal Secret Key",
+  "settings.copySecretKey": "Copy Secret Key",
+  "notify.biometricKeySyncFailed": "The vault was unlocked manually, but the host biometric key state could not be synchronized.",
+  "notify.biometricManualUnlockRequired": "The manual unlock interval has expired. Enter the master password once before using biometrics again.",
+  "notify.biometricStoredKeyInvalid": "The stored biometric device key is no longer valid. Unlock manually and enable biometrics again.",
+  "notify.biometricReauthUpdated": "Biometric re-auth interval updated.",
+  "notify.biometricReauthUpdateFailed": "Unable to update the biometric re-auth interval.",
+  "notify.secretKeyCreated": "A new Secret Key was created. Open Settings and store it somewhere safe.",
+  "notify.unlockRequiredForSecretKey": "Unlock the vault before revealing the Secret Key.",
+  "notify.secretKeyRevealFailed": "Unable to reveal the Secret Key.",
+  "notify.secretKeyCopied": "Secret Key copied to clipboard.",
+  "notify.secretKeyCopyFailed": "Unable to copy the Secret Key. Check clipboard permissions.",
+  "notify.syncCompletedRelockedRecovery": "Sync completed. This device is locked again. Use the source device master password and Secret Key to unlock, then re-enable biometrics if needed.",
+});
+
+Object.assign(messages["zh-CN"], {
+  "settings.appearance.navAlignment": "\u5e95\u90e8\u680f\u4f4d\u7f6e",
+  "settings.appearance.navAlignmentBody": "\u8ba9\u5e95\u90e8\u5bfc\u822a\u6d6e\u5c9b\u5728\u754c\u9762\u4e2d\u5c45\u4e2d\u3001\u9760\u5de6\u6216\u9760\u53f3\u505c\u9760\u3002",
+  "settings.appearance.navAlignment.center": "\u5c45\u4e2d",
+  "settings.appearance.navAlignment.left": "\u9760\u5de6",
+  "settings.appearance.navAlignment.right": "\u9760\u53f3",
+});
+
+Object.assign(messages["en-US"], {
+  "settings.appearance.navAlignment": "Bottom bar position",
+  "settings.appearance.navAlignmentBody":
+    "Place the floating bottom bar in the center, near the left edge, or near the right edge.",
+  "settings.appearance.navAlignment.center": "Centered",
+  "settings.appearance.navAlignment.left": "Left",
+  "settings.appearance.navAlignment.right": "Right",
+});
+
+Object.assign(messages["zh-CN"], {
+  "settings.trayAutoLock": "\u6536\u7eb3\u5230\u6258\u76d8\u540e\u81ea\u52a8\u9501\u5b9a",
+  "settings.trayAutoLockBody":
+    "\u5f53 Windows \u7a97\u53e3\u88ab\u6536\u7eb3\u5230\u6258\u76d8\u540e\uff0c\u5230\u65f6\u4f1a\u81ea\u52a8\u9501\u5b9a\u5e76\u53d1\u51fa\u7cfb\u7edf\u901a\u77e5\u3002",
+  "settings.backgroundAutoLock": "\u9000\u5230\u540e\u53f0\u540e\u81ea\u52a8\u9501\u5b9a",
+  "settings.backgroundAutoLockBody":
+    "\u5f53 Android \u5e94\u7528\u9000\u5230\u540e\u53f0\u540e\uff0c\u5230\u65f6\u4f1a\u81ea\u52a8\u9501\u5b9a\u5e76\u53d1\u51fa\u7cfb\u7edf\u901a\u77e5\u3002",
+  "settings.autoLock.1m": "1 \u5206\u949f",
+  "settings.autoLock.5m": "5 \u5206\u949f",
+  "settings.autoLock.15m": "15 \u5206\u949f",
+  "settings.autoLock.30m": "30 \u5206\u949f",
+  "settings.autoLock.1h": "1 \u5c0f\u65f6",
+  "settings.autoLock.never": "\u4ece\u4e0d",
+  "notify.autoLocked": "\u4fdd\u9669\u5e93\u5df2\u88ab\u5bbf\u4e3b\u81ea\u52a8\u9501\u5b9a\u3002",
+  "notify.trayAutoLockUpdated": "\u6258\u76d8\u81ea\u52a8\u9501\u5b9a\u65f6\u95f4\u5df2\u66f4\u65b0\u3002",
+  "notify.trayAutoLockFailed": "\u66f4\u65b0\u6258\u76d8\u81ea\u52a8\u9501\u5b9a\u65f6\u95f4\u5931\u8d25\u3002",
+  "notify.backgroundAutoLockUpdated": "\u540e\u53f0\u81ea\u52a8\u9501\u5b9a\u65f6\u95f4\u5df2\u66f4\u65b0\u3002",
+  "notify.backgroundAutoLockFailed": "\u66f4\u65b0\u540e\u53f0\u81ea\u52a8\u9501\u5b9a\u65f6\u95f4\u5931\u8d25\u3002",
+});
+
+Object.assign(messages["en-US"], {
+  "settings.trayAutoLock": "Auto-lock after minimizing to tray",
+  "settings.trayAutoLockBody":
+    "When the app is hidden to the Windows tray, it will lock itself after the selected delay and send a system notification.",
+  "settings.backgroundAutoLock": "Auto-lock after going to background",
+  "settings.backgroundAutoLockBody":
+    "When the Android app goes to the background, it will lock itself after the selected delay and send a system notification.",
+  "settings.autoLock.1m": "1 minute",
+  "settings.autoLock.5m": "5 minutes",
+  "settings.autoLock.15m": "15 minutes",
+  "settings.autoLock.30m": "30 minutes",
+  "settings.autoLock.1h": "1 hour",
+  "settings.autoLock.never": "Never",
+  "notify.autoLocked": "The vault was locked automatically by the host.",
+  "notify.trayAutoLockUpdated": "Tray auto-lock delay updated.",
+  "notify.trayAutoLockFailed": "Unable to update the tray auto-lock delay.",
+  "notify.backgroundAutoLockUpdated": "Background auto-lock delay updated.",
+  "notify.backgroundAutoLockFailed": "Unable to update the background auto-lock delay.",
+});
+
 function normalizeLocale(locale) {
   if (SUPPORTED_LOCALES.includes(locale)) {
     return locale;
@@ -651,6 +784,10 @@ function normalizeLocale(locale) {
 
 function normalizeThemeMode(themeMode) {
   return SUPPORTED_THEME_MODES.includes(themeMode) ? themeMode : "system";
+}
+
+function normalizeNavAlignment(alignment) {
+  return SUPPORTED_NAV_ALIGNMENTS.includes(alignment) ? alignment : "center";
 }
 
 function getMessage(locale, key) {
@@ -714,6 +851,10 @@ function setThemeMode(themeMode) {
   state.themeMode = normalizeThemeMode(themeMode);
 }
 
+function setNavAlignment(alignment) {
+  state.navAlignment = normalizeNavAlignment(alignment);
+}
+
 function setSystemPrefersDark(prefersDark) {
   state.systemPrefersDark = Boolean(prefersDark);
 }
@@ -734,6 +875,7 @@ export function useAppPreferences() {
     formatDate,
     setLocale,
     setThemeMode,
+    setNavAlignment,
     setSystemPrefersDark,
     getVuetifyLocale,
     localeOptions: computed(() => [
@@ -744,6 +886,11 @@ export function useAppPreferences() {
       { value: "system", title: translate("settings.appearance.theme.system") },
       { value: "light", title: translate("settings.appearance.theme.light") },
       { value: "dark", title: translate("settings.appearance.theme.dark") },
+    ]),
+    navAlignmentOptions: computed(() => [
+      { value: "center", title: translate("settings.appearance.navAlignment.center") },
+      { value: "left", title: translate("settings.appearance.navAlignment.left") },
+      { value: "right", title: translate("settings.appearance.navAlignment.right") },
     ]),
     resolvedTheme: computed(() => resolveTheme()),
   };

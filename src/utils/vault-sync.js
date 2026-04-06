@@ -1,4 +1,4 @@
-function normalizeItemText(value, fallback = "未命名项目") {
+function normalizeItemText(value, fallback = "Unnamed item") {
   const text = String(value ?? "").trim();
   return text || fallback;
 }
@@ -13,6 +13,14 @@ function pickLatestRecord(records) {
     })[0] || null;
 }
 
+function isLegacyVaultConfig(config) {
+  return Boolean(config?.salt && config?.verification);
+}
+
+function isV2VaultConfig(config) {
+  return Boolean(config?.recoverySalt && config?.recoveryWrappedVaultKey && config?.verification);
+}
+
 export function buildSnapshotPreview(records, deletedRecords = []) {
   const latestRecord = pickLatestRecord(records);
 
@@ -23,7 +31,7 @@ export function buildSnapshotPreview(records, deletedRecords = []) {
       ? {
           id: latestRecord.id,
           siteName: normalizeItemText(latestRecord.siteName),
-          username: normalizeItemText(latestRecord.username, "未填写用户名"),
+          username: normalizeItemText(latestRecord.username, "Unnamed username"),
           createdAt: latestRecord.createdAt || latestRecord.updatedAt || Date.now(),
           updatedAt: latestRecord.updatedAt || latestRecord.createdAt || Date.now(),
         }
@@ -38,7 +46,7 @@ export function buildEncryptedVaultSnapshot({
   deviceName = "",
 }) {
   if (!vaultConfig) {
-    throw new Error("当前没有可导出的密码库配置。");
+    throw new Error("The current vault does not have exportable configuration.");
   }
 
   const activeRecords = Array.isArray(records) ? records : [];
@@ -46,7 +54,7 @@ export function buildEncryptedVaultSnapshot({
   const allRecords = [...activeRecords, ...removedRecords];
 
   return {
-    version: 1,
+    version: 2,
     exportedAt: Date.now(),
     deviceName: String(deviceName || "").trim(),
     vaultConfig,
@@ -65,19 +73,19 @@ export function parseEncryptedVaultSnapshot(text) {
   try {
     snapshot = JSON.parse(String(text || ""));
   } catch {
-    throw new Error("同步数据不是有效的 JSON 格式。");
+    throw new Error("The sync payload is not valid JSON.");
   }
 
   if (!snapshot || typeof snapshot !== "object") {
-    throw new Error("同步数据格式不正确。");
+    throw new Error("The sync payload format is invalid.");
   }
 
-  if (!snapshot.vaultConfig || !snapshot.vaultConfig.salt || !snapshot.vaultConfig.verification) {
-    throw new Error("同步数据缺少密码库配置。");
+  if (!snapshot.vaultConfig || (!isLegacyVaultConfig(snapshot.vaultConfig) && !isV2VaultConfig(snapshot.vaultConfig))) {
+    throw new Error("The sync payload does not contain a valid vault configuration.");
   }
 
   if (!Array.isArray(snapshot.records)) {
-    throw new Error("同步数据缺少记录列表。");
+    throw new Error("The sync payload does not contain a record list.");
   }
 
   const activeRecords = snapshot.records.filter((record) => !record.deletedAt);

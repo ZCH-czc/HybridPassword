@@ -28,9 +28,13 @@ public sealed class HostBridgeState
 
     public bool LaunchAtStartupEnabled { get; set; }
 
+    public int TrayAutoLockMinutes { get; set; }
+
     public bool SupportsExcludeFromRecents { get; set; }
 
     public bool ExcludeFromRecentsEnabled { get; set; }
+
+    public int BackgroundAutoLockMinutes { get; set; }
 
     public bool SupportsAutostartSettingsShortcut { get; set; }
 
@@ -45,9 +49,11 @@ public sealed class HostOperationResult
 
     public string Message { get; set; } = string.Empty;
 
-    public string MasterPassword { get; set; } = string.Empty;
+    public string VaultKeyBase64 { get; set; } = string.Empty;
 
     public bool IsBiometricEnabled { get; set; }
+
+    public bool RequiresManualUnlock { get; set; }
 }
 
 public sealed class HostTextOperationResult
@@ -74,9 +80,13 @@ public sealed class HostFileOperationResult
     public string Content { get; set; } = string.Empty;
 }
 
-public sealed class StoreMasterPasswordRequest
+public sealed class StoreVaultKeyRequest
 {
-    public string MasterPassword { get; set; } = string.Empty;
+    public string VaultKeyBase64 { get; set; } = string.Empty;
+
+    public int ReauthIntervalHours { get; set; }
+
+    public bool MarkManualUnlock { get; set; } = true;
 }
 
 public sealed class SaveTextFileRequest
@@ -91,6 +101,11 @@ public sealed class SaveTextFileRequest
 public sealed class ToggleSettingRequest
 {
     public bool Enabled { get; set; }
+}
+
+public sealed class DurationSettingRequest
+{
+    public int Minutes { get; set; }
 }
 
 public sealed class SyncPreviewItem
@@ -181,6 +196,8 @@ public sealed class LanDeviceSummary
 
     public long ExportedAt { get; set; }
 
+    public string TlsFingerprintSha256 { get; set; } = string.Empty;
+
     public SyncPreview Preview { get; set; } = new();
 }
 
@@ -189,4 +206,6 @@ public sealed class DownloadLanSnapshotRequest
     public string Host { get; set; } = string.Empty;
 
     public int Port { get; set; }
+
+    public string TlsFingerprintSha256 { get; set; } = string.Empty;
 }

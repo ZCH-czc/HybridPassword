@@ -73,7 +73,7 @@ const notesLabel = computed(() =>
             @update:model-value="emit('toggle-select', item.id)"
           />
 
-          <v-avatar color="primary" variant="tonal" size="42">
+          <v-avatar color="secondary" variant="tonal" size="42">
             {{ avatarLabel }}
           </v-avatar>
 
@@ -85,7 +85,7 @@ const notesLabel = computed(() =>
               <v-chip
                 v-if="item.isFavorite"
                 size="x-small"
-                color="primary"
+                color="warning"
                 variant="tonal"
               >
                 {{ t("item.favorite") }}
@@ -107,7 +107,9 @@ const notesLabel = computed(() =>
             :loading="favoriteLoading"
             @click="emit('toggle-favorite', item.id)"
           >
-            <v-icon>{{ item.isFavorite ? "mdi-star" : "mdi-star-outline" }}</v-icon>
+            <v-icon :color="item.isFavorite ? 'warning' : undefined">
+              {{ item.isFavorite ? "mdi-star" : "mdi-star-outline" }}
+            </v-icon>
           </v-btn>
           <v-btn icon variant="text" :loading="editLoading" @click="emit('edit', item.id)">
             <v-icon>mdi-pencil-outline</v-icon>
@@ -193,16 +195,45 @@ const notesLabel = computed(() =>
 
 .vault-list-card,
 .vault-inner-sheet {
+  position: relative;
+  overflow: hidden;
   transition:
-    transform 220ms ease,
-    box-shadow 220ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 220ms ease,
     border-color 220ms ease;
 }
 
+.vault-list-card::before,
+.vault-inner-sheet::before {
+  content: "";
+  position: absolute;
+  inset: auto -12% 44% 24%;
+  height: 42%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.24), transparent);
+  transform: translateX(-44%) skewX(-20deg);
+  filter: blur(10px);
+  opacity: 0;
+  animation: vault-sheen 14s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.vault-inner-sheet {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 0.92),
+      rgba(var(--v-theme-surface), 0.78)
+    ),
+    radial-gradient(circle at top right, rgba(var(--v-theme-secondary), 0.1), transparent 42%);
+  box-shadow:
+    0 8px 18px rgba(22, 32, 46, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
 .vault-list-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 32px rgba(26, 40, 70, 0.08);
+  transform: translateY(-4px) scale(1.003);
+  box-shadow: 0 18px 34px rgba(26, 40, 70, 0.1);
 }
 
 .vault-list-card--selected {

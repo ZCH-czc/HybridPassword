@@ -38,16 +38,20 @@ import {
   saveTextFileWithHost,
   saveWebDavSettingsWithHost,
   scanLanDevicesWithHost,
+  setBackgroundAutoLockMinutes,
   setExcludeFromRecents,
   setLanDeviceNameWithHost,
   setLaunchAtStartup,
   setMinimizeToTray,
+  setTrayAutoLockMinutes,
   unlockWithBiometric,
   updateStoredMasterPassword,
   uploadSnapshotToWebDavWithHost,
 } from "@/utils/native-bridge";
 import { parseEncryptedVaultSnapshot } from "@/utils/vault-sync";
 import { getAppSettingsRecord, saveAppSettingsRecord } from "@/utils/indexed-db";
+
+const DEFAULT_BIOMETRIC_REAUTH_HOURS = 72;
 
 const theme = useTheme();
 const vuetifyLocale = useLocale();
@@ -57,6 +61,7 @@ const {
   t,
   setLocale,
   setThemeMode,
+  setNavAlignment,
   setSystemPrefersDark,
   getVuetifyLocale,
   resolvedTheme,
@@ -82,10 +87,17 @@ let colorSchemeMediaQuery = null;
 
 const settings = reactive({
   onboardingCompleted: false,
+  biometricReauthHours: DEFAULT_BIOMETRIC_REAUTH_HOURS,
 });
 
-const session = reactive({
-  masterPassphrase: "",
+const unlockState = reactive({
+  lastMethod: "",
+  biometricAttempted: false,
+});
+
+const securityState = reactive({
+  secretKey: "",
+  secretKeyLoading: false,
 });
 
 const host = reactive({
@@ -103,8 +115,10 @@ const host = reactive({
   minimizeToTrayEnabled: false,
   supportsLaunchAtStartup: false,
   launchAtStartupEnabled: false,
+  trayAutoLockMinutes: 0,
   supportsExcludeFromRecents: false,
   excludeFromRecentsEnabled: false,
+  backgroundAutoLockMinutes: 0,
   supportsAutostartSettingsShortcut: false,
   supportsWebDavSync: false,
   supportsLanSync: false,
@@ -238,6 +252,7 @@ const summary = computed(() => ({
   filtered: searchedRecords.value.length,
   notes: vault.records.value.reduce((count, record) => count + record.notes.length, 0),
 }));
+const secretKeyHint = computed(() => vault.vaultConfig.value?.secretKeyHint || "");
 
 const lanPublishKey = computed(() => {
   if (!vault.state.unlocked || !host.supportsLanSync) {
@@ -284,6 +299,10 @@ function applyThemeModePreference(themeMode) {
   applyResolvedTheme();
 }
 
+function applyNavAlignmentPreference(alignment) {
+  setNavAlignment(alignment || "center");
+}
+
 function updateSystemThemePreference(prefersDark) {
   setSystemPrefersDark(prefersDark);
   applyResolvedTheme();
@@ -300,8 +319,10 @@ function applySafeAreaInsets(top, bottom) {
 async function persistSettings() {
   await saveAppSettingsRecord({
     themeMode: preferences.themeMode,
+    navAlignment: preferences.navAlignment,
     locale: preferences.locale,
     onboardingCompleted: settings.onboardingCompleted,
+    biometricReauthHours: settings.biometricReauthHours,
   });
 }
 
@@ -310,10 +331,16 @@ async function loadAppSettings() {
     const record = await getAppSettingsRecord();
     applyLocalePreference(record?.locale || getDefaultLocale());
     applyThemeModePreference(record?.themeMode || "system");
+    applyNavAlignmentPreference(record?.navAlignment || "center");
     settings.onboardingCompleted = Boolean(record?.onboardingCompleted);
+    settings.biometricReauthHours = Number(
+      record?.biometricReauthHours ?? DEFAULT_BIOMETRIC_REAUTH_HOURS
+    );
   } catch {
     applyLocalePreference(getDefaultLocale());
     applyThemeModePreference("system");
+    applyNavAlignmentPreference("center");
+    settings.biometricReauthHours = DEFAULT_BIOMETRIC_REAUTH_HOURS;
   }
 }
 
@@ -353,12 +380,34 @@ async function refreshHostState() {
   host.minimizeToTrayEnabled = state.minimizeToTrayEnabled;
   host.supportsLaunchAtStartup = state.supportsLaunchAtStartup;
   host.launchAtStartupEnabled = state.launchAtStartupEnabled;
+  host.trayAutoLockMinutes = state.trayAutoLockMinutes;
   host.supportsExcludeFromRecents = state.supportsExcludeFromRecents;
   host.excludeFromRecentsEnabled = state.excludeFromRecentsEnabled;
+  host.backgroundAutoLockMinutes = state.backgroundAutoLockMinutes;
   host.supportsAutostartSettingsShortcut = state.supportsAutostartSettingsShortcut;
   host.supportsWebDavSync = state.supportsWebDavSync;
   host.supportsLanSync = state.supportsLanSync;
+  if (!host.isBiometricEnabled) {
+    unlockState.biometricAttempted = false;
+  }
   applySafeAreaInsets(state.safeAreaTop, state.safeAreaBottom);
+}
+
+async function syncBiometricState(markManualUnlock = false, overrideVaultKeyBase64 = "") {
+  if (!host.isBiometricEnabled) {
+    return { success: true };
+  }
+
+  const vaultKeyBase64 =
+    overrideVaultKeyBase64 || (vault.state.unlocked ? vault.getVaultKeyBase64() : "");
+
+  const result = await updateStoredMasterPassword(
+    vaultKeyBase64,
+    settings.biometricReauthHours,
+    markManualUnlock
+  );
+  await refreshHostState();
+  return result;
 }
 
 function resetSelection() {
@@ -403,10 +452,22 @@ async function publishCurrentLanSnapshot(silent = true) {
   }
 }
 
-async function unlockVaultWithPassphrase(passphrase) {
+async function unlockVaultWithPassphrase(passphrase, secretKey = "") {
   try {
-    await vault.submitMasterPassword(passphrase);
-    session.masterPassphrase = passphrase;
+    const unlockResult = await vault.submitMasterPassword(passphrase, secretKey);
+    unlockState.lastMethod = "password";
+    securityState.secretKey = unlockResult.generatedSecretKey || "";
+
+    if (host.isBiometricEnabled) {
+      const syncResult = await syncBiometricState(true);
+      if (!syncResult.success) {
+        notify(syncResult.message || t("notify.biometricKeySyncFailed"), "warning");
+      }
+    }
+
+    if (unlockResult.generatedSecretKey) {
+      notify(t("notify.secretKeyCreated"), "info");
+    }
 
     if (!settings.onboardingCompleted) {
       onboardingVisible.value = true;
@@ -419,8 +480,8 @@ async function unlockVaultWithPassphrase(passphrase) {
   }
 }
 
-async function handleMasterSubmit(passphrase) {
-  await unlockVaultWithPassphrase(passphrase);
+async function handleMasterSubmit(payload) {
+  await unlockVaultWithPassphrase(payload.passphrase, payload.secretKey);
 }
 
 async function handleBiometricUnlock() {
@@ -428,15 +489,26 @@ async function handleBiometricUnlock() {
 
   try {
     const result = await unlockWithBiometric();
-    if (!result.success || !result.masterPassword) {
-      notify(result.message || t("notify.biometricUnavailable", { label: host.biometricLabel }), "warning");
+    if (!result.success || !result.vaultKeyBase64) {
+      notify(
+        result.message ||
+          (result.requiresManualUnlock
+            ? t("notify.biometricManualUnlockRequired")
+            : t("notify.biometricUnavailable", { label: host.biometricLabel })),
+        result.requiresManualUnlock ? "info" : "warning"
+      );
       await refreshHostState();
       return;
     }
 
-    const success = await unlockVaultWithPassphrase(result.masterPassword);
-    if (!success) {
-      notify(t("notify.biometricStoredPasswordExpired"), "warning");
+    try {
+      await vault.unlockWithVaultKeyBase64(result.vaultKeyBase64);
+      unlockState.lastMethod = "biometric";
+      securityState.secretKey = "";
+    } catch (error) {
+      await disableBiometricUnlock();
+      await refreshHostState();
+      notify(error.message || t("notify.biometricStoredKeyInvalid"), "warning");
     }
   } finally {
     busy.biometricUnlocking = false;
@@ -450,7 +522,9 @@ function handleLockVault() {
   changeMasterPasswordVisible.value = false;
   pendingDeleteIds.value = [];
   pendingDeleteTitle.value = "";
-  session.masterPassphrase = "";
+  unlockState.lastMethod = "";
+  unlockState.biometricAttempted = false;
+  securityState.secretKey = "";
   resetSelection();
 }
 
@@ -770,6 +844,15 @@ async function handleUpdateLanguage(localeCode) {
   }
 }
 
+async function handleUpdateNavAlignment(alignment) {
+  try {
+    applyNavAlignmentPreference(alignment);
+    await persistSettings();
+  } catch {
+    notify(t("notify.themeFailed"), "error");
+  }
+}
+
 async function handleCompleteOnboarding() {
   settings.onboardingCompleted = true;
 
@@ -781,7 +864,7 @@ async function handleCompleteOnboarding() {
 }
 
 async function handleEnableBiometricUnlock() {
-  if (!session.masterPassphrase) {
+  if (!vault.state.unlocked || unlockState.lastMethod !== "password") {
     notify(t("notify.enterMasterPasswordFirst"), "info");
     return;
   }
@@ -789,7 +872,10 @@ async function handleEnableBiometricUnlock() {
   busy.biometricConfiguring = true;
 
   try {
-    const result = await enableBiometricUnlock(session.masterPassphrase);
+    const result = await enableBiometricUnlock(
+      vault.getVaultKeyBase64(),
+      settings.biometricReauthHours
+    );
     await refreshHostState();
 
     if (!result.success) {
@@ -826,10 +912,11 @@ async function handleChangeMasterPassword(payload) {
 
   try {
     await vault.changeMasterPassword(payload.currentPassphrase, payload.nextPassphrase);
-    session.masterPassphrase = payload.nextPassphrase;
+    unlockState.lastMethod = "password";
+    securityState.secretKey = "";
 
     if (host.isBiometricEnabled) {
-      const syncResult = await updateStoredMasterPassword(payload.nextPassphrase);
+      const syncResult = await syncBiometricState(true);
       if (!syncResult.success) {
         notify(syncResult.message || t("notify.masterPasswordSyncWarning"), "warning");
       }
@@ -842,6 +929,68 @@ async function handleChangeMasterPassword(payload) {
     notify(error.message || t("notify.masterPasswordChangeFailed"), "error");
   } finally {
     busy.changingMasterPassword = false;
+  }
+}
+
+async function handleUpdateBiometricReauthHours(hours) {
+  const normalizedHours = Number(hours);
+  if (Number.isNaN(normalizedHours)) {
+    return;
+  }
+
+  busy.biometricConfiguring = true;
+
+  try {
+    settings.biometricReauthHours = normalizedHours;
+    await persistSettings();
+
+    if (host.isBiometricEnabled) {
+      const result = await syncBiometricState(false, "");
+      if (!result.success) {
+        notify(result.message || t("notify.biometricReauthUpdateFailed"), "warning");
+        return;
+      }
+    }
+
+    notify(t("notify.biometricReauthUpdated"));
+  } catch (error) {
+    notify(error.message || t("notify.biometricReauthUpdateFailed"), "warning");
+  } finally {
+    busy.biometricConfiguring = false;
+  }
+}
+
+async function handleRevealSecretKey() {
+  if (!vault.state.unlocked) {
+    notify(t("notify.unlockRequiredForSecretKey"), "info");
+    return;
+  }
+
+  securityState.secretKeyLoading = true;
+
+  try {
+    securityState.secretKey = await vault.getSecretKey();
+  } catch (error) {
+    notify(error.message || t("notify.secretKeyRevealFailed"), "warning");
+  } finally {
+    securityState.secretKeyLoading = false;
+  }
+}
+
+async function handleCopySecretKey() {
+  try {
+    if (!securityState.secretKey) {
+      await handleRevealSecretKey();
+    }
+
+    if (!securityState.secretKey) {
+      return;
+    }
+
+    await copyTextToClipboard(securityState.secretKey);
+    notify(t("notify.secretKeyCopied"));
+  } catch (error) {
+    notify(error.message || t("notify.secretKeyCopyFailed"), "warning");
   }
 }
 
@@ -881,6 +1030,24 @@ async function handleToggleLaunchAtStartup(enabled) {
   }
 }
 
+async function handleUpdateTrayAutoLockMinutes(minutes) {
+  busy.platformSettings = true;
+
+  try {
+    const result = await setTrayAutoLockMinutes(minutes);
+    await refreshHostState();
+
+    if (!result.success) {
+      notify(result.message || t("notify.trayAutoLockFailed"), "warning");
+      return;
+    }
+
+    notify(result.message || t("notify.trayAutoLockUpdated"));
+  } finally {
+    busy.platformSettings = false;
+  }
+}
+
 async function handleToggleExcludeFromRecents(enabled) {
   busy.platformSettings = true;
 
@@ -894,6 +1061,24 @@ async function handleToggleExcludeFromRecents(enabled) {
     }
 
     notify(result.message || t("notify.excludeFromRecentsUpdated"));
+  } finally {
+    busy.platformSettings = false;
+  }
+}
+
+async function handleUpdateBackgroundAutoLockMinutes(minutes) {
+  busy.platformSettings = true;
+
+  try {
+    const result = await setBackgroundAutoLockMinutes(minutes);
+    await refreshHostState();
+
+    if (!result.success) {
+      notify(result.message || t("notify.backgroundAutoLockFailed"), "warning");
+      return;
+    }
+
+    notify(result.message || t("notify.backgroundAutoLockUpdated"));
   } finally {
     busy.platformSettings = false;
   }
@@ -1038,23 +1223,18 @@ async function handleConfirmSync() {
   busy.lanConfirming = true;
 
   try {
-    const currentPassphrase = session.masterPassphrase;
     await vault.replaceWithEncryptedSnapshot(syncState.confirmSnapshotText);
     syncState.confirmVisible = false;
 
-    if (currentPassphrase) {
-      try {
-        await vault.submitMasterPassword(currentPassphrase);
-        session.masterPassphrase = currentPassphrase;
-        await publishCurrentLanSnapshot(true);
-        notify(t("notify.syncCompletedUnlocked"));
-        return;
-      } catch {
-        session.masterPassphrase = "";
-      }
+    if (host.isBiometricEnabled) {
+      await disableBiometricUnlock();
+      await refreshHostState();
     }
 
-    notify(t("notify.syncCompletedRelocked"), "warning");
+    unlockState.lastMethod = "";
+    unlockState.biometricAttempted = false;
+    securityState.secretKey = "";
+    notify(t("notify.syncCompletedRelockedRecovery"), "warning");
   } catch (error) {
     notify(error.message || t("notify.syncFailed"), "error");
   } finally {
@@ -1068,6 +1248,15 @@ function handleWindowResize() {
   }
 
   refreshHostState();
+}
+
+function handleHostLockRequested(event) {
+  if (!vault.state.unlocked) {
+    return;
+  }
+
+  handleLockVault();
+  notify(event?.detail?.message || t("notify.autoLocked"), "info");
 }
 
 function handleColorSchemeChange(event) {
@@ -1108,8 +1297,28 @@ watch(
   { flush: "post" }
 );
 
+watch(
+  [masterDialogVisible, biometricUnlockReady],
+  ([visible, ready]) => {
+    if (
+      !visible ||
+      !ready ||
+      busy.biometricUnlocking ||
+      vault.state.unlocking ||
+      unlockState.biometricAttempted
+    ) {
+      return;
+    }
+
+    unlockState.biometricAttempted = true;
+    void handleBiometricUnlock();
+  },
+  { flush: "post" }
+);
+
 onMounted(async () => {
   window.addEventListener("resize", handleWindowResize, { passive: true });
+  window.addEventListener("password-vault-host-lock", handleHostLockRequested);
 
   if (typeof window.matchMedia === "function") {
     colorSchemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -1137,6 +1346,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleWindowResize);
+  window.removeEventListener("password-vault-host-lock", handleHostLockRequested);
 
   if (colorSchemeMediaQuery) {
     if (typeof colorSchemeMediaQuery.removeEventListener === "function") {
@@ -1242,6 +1452,7 @@ onBeforeUnmount(() => {
                   :busy="busy.importing || busy.exporting || isLocked"
                   :theme-mode="preferences.themeMode"
                   :resolved-theme="resolvedTheme"
+                  :nav-alignment="preferences.navAlignment"
                   :locale="preferences.locale"
                   :changing-master-password="busy.changingMasterPassword"
                   :biometric-supported="host.isSupported"
@@ -1250,13 +1461,19 @@ onBeforeUnmount(() => {
                   :biometric-label="host.biometricLabel"
                   :biometric-message="host.message"
                   :biometric-loading="busy.biometricConfiguring"
+                  :biometric-reauth-hours="settings.biometricReauthHours"
+                  :secret-key-hint="secretKeyHint"
+                  :secret-key-value="securityState.secretKey"
+                  :secret-key-loading="securityState.secretKeyLoading"
                   :platform="host.platform"
                   :supports-minimize-to-tray="host.supportsMinimizeToTray"
                   :minimize-to-tray-enabled="host.minimizeToTrayEnabled"
                   :supports-launch-at-startup="host.supportsLaunchAtStartup"
                   :launch-at-startup-enabled="host.launchAtStartupEnabled"
+                  :tray-auto-lock-minutes="host.trayAutoLockMinutes"
                   :supports-exclude-from-recents="host.supportsExcludeFromRecents"
                   :exclude-from-recents-enabled="host.excludeFromRecentsEnabled"
+                  :background-auto-lock-minutes="host.backgroundAutoLockMinutes"
                   :supports-autostart-settings-shortcut="host.supportsAutostartSettingsShortcut"
                   :platform-settings-loading="busy.platformSettings"
                   :autostart-opening="busy.autostartOpening"
@@ -1273,13 +1490,19 @@ onBeforeUnmount(() => {
                   @import="handleImport"
                   @lock="handleLockVault"
                   @update-theme-mode="handleUpdateThemeMode"
+                  @update-nav-alignment="handleUpdateNavAlignment"
                   @update-language="handleUpdateLanguage"
                   @change-master-password="changeMasterPasswordVisible = true"
                   @enable-biometric="handleEnableBiometricUnlock"
                   @disable-biometric="handleDisableBiometricUnlock"
+                  @update-biometric-reauth-hours="handleUpdateBiometricReauthHours"
+                  @reveal-secret-key="handleRevealSecretKey"
+                  @copy-secret-key="handleCopySecretKey"
                   @toggle-minimize-to-tray="handleToggleMinimizeToTray"
                   @toggle-launch-at-startup="handleToggleLaunchAtStartup"
+                  @update-tray-auto-lock-minutes="handleUpdateTrayAutoLockMinutes"
                   @toggle-exclude-from-recents="handleToggleExcludeFromRecents"
+                  @update-background-auto-lock-minutes="handleUpdateBackgroundAutoLockMinutes"
                   @open-autostart-settings="handleOpenAutostartSettings"
                   @save-webdav-settings="handleSaveWebDavSettings"
                   @upload-webdav="handleUploadWebDav"
@@ -1295,7 +1518,7 @@ onBeforeUnmount(() => {
           </template>
         </div>
 
-        <AppBottomNav v-model="currentView" />
+        <AppBottomNav v-model="currentView" :alignment="preferences.navAlignment" />
       </div>
     </v-main>
 
@@ -1306,6 +1529,8 @@ onBeforeUnmount(() => {
       :biometric-enabled="biometricUnlockReady"
       :biometric-label="host.biometricLabel"
       :biometric-loading="busy.biometricUnlocking"
+      :requires-secret-key="vault.state.requiresSecretKeyForUnlock"
+      :secret-key-hint="secretKeyHint"
       @submit="handleMasterSubmit"
       @biometric-unlock="handleBiometricUnlock"
     />

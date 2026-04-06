@@ -2,38 +2,45 @@
 
 ## Overview
 
-`Password Vault Hybrid` is a frontend-first password manager built for `Android` and `Windows` embedded `WebView` / `Blazor Hybrid` scenarios.
+`Password Vault Hybrid` is a local-first password manager built with `Vue 3`, `Vuetify 3`, `Vite`, and a `.NET MAUI / Blazor Hybrid` host for `Windows` and `Android`.
 
-It uses `Vue 3`, `Vuetify 3`, and `Vite` for the UI layer, `IndexedDB` for local persistence, and `AES-GCM` via the `Web Crypto API` for encrypted at-rest storage. The app is designed to work without a backend and can be extended through host-provided capabilities such as biometrics, native file dialogs, system window behaviors, WebDAV sync, and LAN sync.
+The project is designed around one shared frontend with zero backend dependency:
 
-This repository contains two main parts:
+- The `Vue` app owns the vault UI, form flows, search, import/export, sync UX, theme, language, and PWA delivery.
+- The `MAUI Hybrid` host embeds the same frontend and exposes native platform capabilities such as biometrics, native file dialogs, system notifications, tray behavior, and background-aware auto-locking.
 
-- A `Vue` application that handles the password vault UI, search, import/export, sync flows, and user experience.
-- A `.NET MAUI / Blazor Hybrid` host that embeds the web app and exposes platform features for Windows and Android.
+The app stores encrypted vault data locally in `IndexedDB`, uses the `Web Crypto API` for browser-side encryption, and keeps host-only platform features behind a thin bridge so the web UI can stay portable.
 
-## Use Cases
+## Highlights
 
-- Embedding a pure web password manager into an Android WebView
-- Hosting the same frontend inside a Windows desktop hybrid shell
-- Running a local-first password vault with zero backend dependency
-- Gradually integrating native platform capabilities without rewriting the UI
-
-## Core Features
-
-- Master password setup, unlock, and update
-- Local persistence with `IndexedDB`
-- Encrypted vault storage using `AES-GCM`
-- Home / List / Settings navigation structure
+- Master password setup, unlock, and password rotation
+- `Secret Key` support for stronger cross-device recovery and sync unlock
+- `IndexedDB` persistence with encrypted password fields at rest
+- `AES-GCM` encryption through the `Web Crypto API`
+- Home / List / Settings app structure with responsive UI
 - Favorites, recently deleted items, batch favorite, and batch delete
-- Live search across usernames and notes
+- Live search across site name, username, and notes
 - Random password generator
-- CSV import and CSV/TXT export
+- CSV import and CSV / TXT export
 - First-run onboarding
-- Dark mode
-- Windows Hello / Android biometric unlock bridge
+- Language switching and theme switching
+- Windows Hello / Android biometric unlock through the host
 - WebDAV encrypted snapshot sync
-- LAN device discovery and encrypted snapshot sync
-- Android safe-area support and Windows tray / auto-start host options
+- TLS-protected LAN sync with device preview and confirmation
+- Windows tray options, startup options, and tray auto-lock delay
+- Android recent-tasks behavior, background auto-lock delay, and host notifications
+- Browser PWA support for standalone web distribution
+
+## Security Model
+
+- Plaintext passwords are not stored in `localStorage`
+- Password entries are stored in encrypted form inside `IndexedDB`
+- The vault uses a random vault key for actual data encryption
+- The master password unlocks or unwraps local access; it is not used as the raw storage format for vault records
+- `Secret Key` provides an additional recovery / cross-device unlock factor
+- Host biometrics store a host-protected vault-unlock artifact, not a reusable plaintext master password in the web layer
+- WebDAV and LAN sync operate on encrypted full-vault snapshots
+- LAN sync confirmation shows the latest item preview from both devices before replacement
 
 ## Architecture
 
@@ -45,61 +52,140 @@ This repository contains two main parts:
 - `Vuetify 3`
 - `Vite`
 
-### Storage and Security
+### Storage and Cryptography
 
-- `IndexedDB` for local storage
-- `PBKDF2 + AES-GCM` with the `Web Crypto API`
-- Vault verification ciphertext for master password validation
-- Encrypted full-vault snapshots for WebDAV and LAN sync
+- `IndexedDB` for local encrypted persistence
+- `PBKDF2` for password-derived wrapping
+- `AES-GCM` for password field and vault payload encryption
+- `Web Crypto API` for all browser-side crypto operations
 
 ### Host Layer
 
 - `.NET MAUI`
 - `HybridWebView`
 - `SecureStorage`
-- Native Windows / Android interop services
+- Windows and Android host services for biometrics, files, tray/background handling, notifications, and sync transport
+
+## Password Save Flow
+
+```mermaid
+flowchart TD
+  A["User opens Create or Edit dialog"] --> B["Vuetify form validates username, password, and notes"]
+  B --> C["Vue builds a normalized password draft"]
+  C --> D["Vault composable requests encryption with the in-memory vault key"]
+  D --> E["Web Crypto encrypts the password field with AES-GCM"]
+  E --> F["Encrypted record is written to IndexedDB"]
+  F --> G["Vue refreshes the in-memory record list"]
+  G --> H["UI updates Home / List / Favorites / Recently Deleted views"]
+  H --> I["If host sync is enabled, the encrypted snapshot can be republished later"]
+```
+
+## App Unlock Flow
+
+```mermaid
+flowchart TD
+  A["App starts"] --> B["Load app settings and host bridge state"]
+  B --> C["Bootstrap vault configuration from IndexedDB"]
+  C --> D{"First run?"}
+  D -- "Yes" --> E["Show setup dialog for master password"]
+  E --> F["Generate vault key and Secret Key"]
+  F --> G["Store wrapped vault configuration and unlock session"]
+  D -- "No" --> H["Show unlock dialog"]
+  H --> I{"Biometrics enabled and available?"}
+  I -- "Yes" --> J["Host biometric prompt runs first"]
+  J --> K{"Biometric unlock succeeds?"}
+  K -- "Yes" --> L["Host returns vault-unlock artifact"]
+  L --> M["Vue restores vault key and unlocks session"]
+  K -- "No or manual reauth required" --> N["Prompt for master password"]
+  I -- "No" --> N
+  N --> O{"Secret Key required?"}
+  O -- "Yes" --> P["User enters master password and Secret Key"]
+  O -- "No" --> Q["User enters master password"]
+  P --> R["Vue unwraps vault key"]
+  Q --> R
+  R --> S["Vault unlocks in memory for the current session"]
+```
+
+## PWA Support
+
+The Vue app now includes browser-oriented PWA support:
+
+- `manifest.webmanifest`
+- `service worker`
+- offline fallback page
+- installable browser experience for secure web hosting
+
+Important implementation note:
+
+- PWA registration is intentionally limited to real browser environments
+- `HybridWebView`, `WebView2`, and Android WebView hosts do **not** register the service worker
+- This keeps the web release convenient for browser users while avoiding side effects in Windows and Android host packaging
 
 ## Sync Strategy
 
 ### WebDAV
 
-- Sync uploads and downloads a fully encrypted vault snapshot
-- Plaintext passwords are not sent to the server
-- The current implementation uses a single remote file path
+- Uploads and downloads a fully encrypted vault snapshot
+- Plaintext passwords are never sent to the server
+- Uses a single configured remote file path per vault
 
 ### LAN Sync
 
-- Device discovery is handled through host-side UDP broadcast
-- Snapshot retrieval is handled through a host-side local HTTP endpoint
-- Before syncing, the UI shows the latest item added on both devices so the user can identify the more recent vault
-- The current first version applies a full replacement from the selected source device
+- Device discovery is handled by the host layer
+- Snapshot transfer is host-driven
+- Transport is protected with TLS and certificate fingerprint validation
+- The UI asks for confirmation before replacing the local encrypted vault snapshot
+- The latest added item from both devices is shown as a sanity check before sync
+
+## Auto-Lock and Host Notifications
+
+### Windows
+
+- Optional minimize-to-tray behavior
+- Optional launch at startup
+- Configurable delay to auto-lock after the app is hidden to tray
+- System notification is sent through the Windows host when the vault auto-locks
+
+### Android
+
+- Optional hide-from-recents behavior
+- Shortcut to relevant system auto-start / background settings
+- Configurable delay to auto-lock after the app goes to background
+- System notification is sent through the Android host when the vault auto-locks
 
 ## Project Structure
 
 ```text
 .
-├─ blazor/                                  # .NET MAUI / Blazor Hybrid host
-│  └─ blazorApp/blazorApp
-│     ├─ Platforms/
-│     ├─ Resources/
-│     ├─ Services/
-│     └─ wwwroot/
-├─ scripts/                                 # build and sync scripts
-├─ src/                                     # Vue frontend source
-│  ├─ components/                           # UI components
-│  ├─ composables/                          # composable logic
-│  ├─ models/                               # data models
-│  ├─ plugins/                              # plugin setup
-│  ├─ styles/                               # global styles
-│  └─ utils/                                # crypto, storage, CSV, bridge, sync helpers
-├─ index.html
-├─ package.json
-└─ vite.config.js
+|-- blazor/
+|   `-- blazorApp/blazorApp/
+|       |-- Platforms/
+|       |-- Resources/
+|       |-- Services/
+|       `-- wwwroot/
+|-- public/
+|   |-- appicon.svg
+|   |-- favicon.svg
+|   |-- manifest.webmanifest
+|   |-- offline.html
+|   `-- sw.js
+|-- scripts/
+|-- src/
+|   |-- components/
+|   |-- composables/
+|   |-- models/
+|   |-- plugins/
+|   |-- styles/
+|   `-- utils/
+|-- index.html
+|-- package.json
+|-- README.md
+`-- vite.config.js
 ```
 
 ## Local Development
 
-Install dependencies and run the web app in dev mode:
+Install dependencies and start the web app:
 
 ```bash
 npm i
@@ -118,24 +204,16 @@ Build the frontend and sync the output into the MAUI host:
 npm run build:hybrid
 ```
 
-Build a Windows setup installer:
-
-```bash
-npm run setup:windows
-```
-
-The installer version is taken from the root `package.json` `version` field first. If it is missing, the script falls back to the MAUI host `ApplicationDisplayVersion`.
-
-Build an Android APK:
-
-```bash
-npm run setup:android
-```
-
 Sync an existing frontend build into the MAUI host:
 
 ```bash
 npm run sync:maui
+```
+
+Preview the built web app:
+
+```bash
+npm run preview
 ```
 
 ## Host Build
@@ -152,7 +230,7 @@ Android:
 dotnet build blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-android
 ```
 
-If MAUI still references stale hashed assets after `build:hybrid`, run a clean first and build again:
+If the MAUI host still references stale hashed frontend assets, clean first:
 
 ```bash
 dotnet clean blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-windows10.0.19041.0
@@ -161,13 +239,13 @@ dotnet clean blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-android
 
 ## Windows Release Publishing
 
-Generate the unpackaged Windows release folder:
+Generate the unpackaged Windows publish folder:
 
 ```bash
 dotnet publish blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-windows10.0.19041.0 -c Release -p:WindowsPackageType=None
 ```
 
-The published output is written to:
+Output:
 
 ```text
 blazor/blazorApp/blazorApp/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish
@@ -179,11 +257,13 @@ Generate the Windows installer from the project root:
 npm run setup:windows
 ```
 
-The generated setup file is written to:
+Output:
 
 ```text
 blazor/blazorApp/blazorApp/bin/Release/Installer
 ```
+
+The installer version is read from the root `package.json` `version` field first, then falls back to the MAUI host `ApplicationDisplayVersion`.
 
 ## Android Release Publishing
 
@@ -193,29 +273,37 @@ Generate a release APK:
 npm run setup:android
 ```
 
-The script runs MAUI Android publish with APK output enabled, then copies the newest generated APK into:
+Output:
 
 ```text
 blazor/blazorApp/blazorApp/bin/Release/Android
 ```
 
-The output file name follows this format:
+The APK file name follows this pattern:
 
 ```text
 PasswordVault_<version>_android.apk
 ```
 
-The file name version is taken from the root `package.json` `version` field first, then falls back to the MAUI host `ApplicationDisplayVersion`.
+The version is taken from the root `package.json` `version` field first, then falls back to the MAUI host `ApplicationDisplayVersion`.
 
-If you later need a store-ready signing key, configure Android keystore signing in the MAUI project and keep using the same script.
+## Packaging Notes
 
-## Security Notes
+- `vite.config.js` uses relative asset paths so the frontend can run inside `HybridWebView`
+- Browser debugging falls back to web file APIs when native dialogs are unavailable
+- In the hybrid host, native file dialogs are preferred over browser file pickers
+- The PWA service worker is only registered in secure browser contexts and is intentionally skipped inside the hybrid host
+- Windows setup output is generated under `blazor/blazorApp/blazorApp/bin/Release/Installer`
+- The current Windows installer packages the published app folder as-is
+- For strict CSP deployments, allow at least:
 
-- Plaintext vault data is not stored in `localStorage`
-- Password entries are stored in encrypted form inside `IndexedDB`
-- Biometrics currently act as a host-assisted unlock flow for a stored master password copy
-- WebDAV and LAN sync operate on encrypted snapshots, not decrypted business records
-- LAN sync currently uses a full-vault replacement strategy and always requires confirmation
+```text
+script-src 'self'
+style-src 'self' 'unsafe-inline'
+font-src 'self' data:
+img-src 'self' data: blob:
+connect-src 'self' https:
+```
 
 ## Host Features
 
@@ -224,31 +312,31 @@ If you later need a store-ready signing key, configure Android keystore signing 
 - Biometric unlock
 - Minimize to system tray on close
 - Auto-start on system boot
+- Tray auto-lock delay
 - Native save/open dialogs
+- Host-driven system notification on auto-lock
 
 ### Android
 
 - Biometric unlock
 - Native save/open dialogs
 - Hide from recent tasks
-- Safe-area handling for status bar and bottom gesture area
-- Deep links into vendor/system settings for auto-start or background behavior
+- Background auto-lock delay
+- Safe-area handling for status bar and gesture area
+- Shortcut into relevant system settings for auto-start or background behavior
+- Host-driven system notification on auto-lock
 
-## Packaging Notes
+## Known Notes
 
-- `vite.config.js` uses relative asset paths for embedded WebView loading
-- Browser-based debugging falls back to web file APIs
-- In the hybrid host, native save/open dialogs are preferred
-- Windows setup output is generated at `blazor/blazorApp/blazorApp/bin/Release/Installer`
-- The current Windows installer packages the published app folder as-is; it does not bundle external runtime installers
-- For strict CSP scenarios, allow at least:
-  - `script-src 'self'`
-  - `style-src 'self' 'unsafe-inline'`
-  - `font-src 'self' data:`
+- LAN sync currently replaces the full encrypted vault snapshot instead of doing incremental merge
+- Browser PWA installation works best on `HTTPS` or `localhost`
+- Android 13+ may request notification permission before auto-lock notifications can be shown
+- The frontend build still emits a large chunk warning because Vuetify and icon assets are substantial
 
 ## Roadmap Ideas
 
 - Incremental sync and conflict resolution
-- Bluetooth-based device sync
+- Bluetooth-based sync
 - Multiple vaults or category tags
-- Stronger host-side key wrapping
+- More unified motion and surface language across all views
+- Stronger host-side key wrapping strategy

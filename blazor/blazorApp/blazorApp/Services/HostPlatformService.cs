@@ -31,6 +31,12 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
     private const string WindowsStartupTaskId = "PasswordVaultStartup";
 
     private Microsoft.Maui.Controls.Window? _mauiWindow;
+    private readonly IHostAutoLockService _hostAutoLockService;
+
+    public HostPlatformService(IHostAutoLockService hostAutoLockService)
+    {
+        _hostAutoLockService = hostAutoLockService;
+    }
 
 #if WINDOWS
     private const int GwlWndProc = -4;
@@ -88,9 +94,11 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
         state.MinimizeToTrayEnabled = Preferences.Default.Get(WindowsMinimizeToTrayKey, false);
         state.SupportsLaunchAtStartup = true;
         state.LaunchAtStartupEnabled = Preferences.Default.Get(WindowsLaunchAtStartupKey, false);
+        state.TrayAutoLockMinutes = _hostAutoLockService.TrayAutoLockMinutes;
 #elif ANDROID
         state.SupportsExcludeFromRecents = true;
         state.ExcludeFromRecentsEnabled = Preferences.Default.Get(AndroidExcludeFromRecentsKey, false);
+        state.BackgroundAutoLockMinutes = _hostAutoLockService.BackgroundAutoLockMinutes;
         state.SupportsAutostartSettingsShortcut = true;
 
         AndroidHostPlatformBootstrap.ConfigureActivity(Platform.CurrentActivity);
@@ -145,6 +153,15 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
 #endif
     }
 
+    public Task<HostOperationResult> SetTrayAutoLockMinutesAsync(int minutes)
+    {
+#if WINDOWS
+        return _hostAutoLockService.SetTrayAutoLockMinutesAsync(minutes);
+#else
+        return Task.FromResult(BuildUnsupportedResult("当前平台不支持托盘自动锁定。"));
+#endif
+    }
+
     public Task<HostOperationResult> SetExcludeFromRecentsAsync(bool enabled)
     {
 #if ANDROID
@@ -160,6 +177,15 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
         });
 #else
         return Task.FromResult(BuildUnsupportedResult("当前平台不支持最近任务卡片设置。"));
+#endif
+    }
+
+    public Task<HostOperationResult> SetBackgroundAutoLockMinutesAsync(int minutes)
+    {
+#if ANDROID
+        return _hostAutoLockService.SetBackgroundAutoLockMinutesAsync(minutes);
+#else
+        return Task.FromResult(BuildUnsupportedResult("当前平台不支持后台自动锁定。"));
 #endif
     }
 
@@ -273,6 +299,7 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
 
         AddTrayIcon();
         ShowWindow(_windowHandle, SwHide);
+        _hostAutoLockService.NotifyTrayHidden();
     }
 
     private void RestoreFromTray()
@@ -287,6 +314,7 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
 
             _nativeWindow?.Activate();
             RemoveTrayIcon();
+            _hostAutoLockService.NotifyTrayVisible();
         });
     }
 
@@ -642,10 +670,15 @@ internal static class AndroidHostPlatformBootstrap
         {
             var systemBarInsets = rootInsets.GetInsets(WindowInsetsCompat.Type.SystemBars());
             var gestureInsets = rootInsets.GetInsets(WindowInsetsCompat.Type.SystemGestures());
+            var mandatoryGestureInsets = rootInsets.GetInsets(WindowInsetsCompat.Type.MandatorySystemGestures());
+            var tappableInsets = rootInsets.GetInsets(WindowInsetsCompat.Type.TappableElement());
+            var cutoutInsets = rootInsets.GetInsets(WindowInsetsCompat.Type.DisplayCutout());
 
             return new SafeAreaInsets(
-                systemBarInsets.Top,
-                Math.Max(systemBarInsets.Bottom, gestureInsets.Bottom));
+                Math.Max(systemBarInsets.Top, cutoutInsets.Top),
+                Math.Max(
+                    Math.Max(systemBarInsets.Bottom, gestureInsets.Bottom),
+                    Math.Max(mandatoryGestureInsets.Bottom, tappableInsets.Bottom)));
         }
 
         return new SafeAreaInsets(

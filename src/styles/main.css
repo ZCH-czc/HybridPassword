@@ -2,16 +2,24 @@
   color-scheme: light dark;
   --host-safe-top: 0px;
   --host-safe-bottom: 0px;
-  --vault-radius: 26px;
-  --vault-radius-lg: 30px;
-  --vault-shadow: 0 18px 36px rgba(20, 34, 58, 0.08);
-  --vault-shadow-soft: 0 10px 24px rgba(20, 34, 58, 0.05);
-  --vault-bottom-nav-height: 68px;
+  --host-safe-top-effective: max(var(--host-safe-top), env(safe-area-inset-top, 0px));
+  --host-safe-bottom-effective: max(var(--host-safe-bottom), env(safe-area-inset-bottom, 0px));
+  --vault-radius: 24px;
+  --vault-radius-lg: 24px;
+  --vault-shadow: 0 22px 48px rgba(31, 39, 56, 0.11);
+  --vault-shadow-soft: 0 12px 30px rgba(31, 39, 56, 0.07);
+  --vault-bottom-nav-height: 116px;
+  --vault-glass-border: rgba(255, 255, 255, 0.38);
+  --vault-glass-highlight: rgba(255, 255, 255, 0.52);
+  --vault-nav-shadow: 0 24px 46px rgba(24, 33, 48, 0.18);
 }
 
 .v-theme--dark {
-  --vault-shadow: 0 22px 42px rgba(0, 0, 0, 0.34);
-  --vault-shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.22);
+  --vault-shadow: 0 26px 54px rgba(0, 0, 0, 0.4);
+  --vault-shadow-soft: 0 14px 32px rgba(0, 0, 0, 0.26);
+  --vault-glass-border: rgba(255, 255, 255, 0.08);
+  --vault-glass-highlight: rgba(255, 255, 255, 0.12);
+  --vault-nav-shadow: 0 26px 54px rgba(0, 0, 0, 0.4);
 }
 
 html,
@@ -22,26 +30,115 @@ body,
 }
 
 body {
-  font-family: Roboto, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family:
+    "Plus Jakarta Sans",
+    "SF Pro Display",
+    "SF Pro Text",
+    "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  font-optical-sizing: auto;
   background:
-    radial-gradient(circle at top left, rgba(var(--v-theme-primary), 0.14), transparent 28%),
-    radial-gradient(circle at top right, rgba(var(--v-theme-primary), 0.1), transparent 26%),
-    radial-gradient(circle at bottom right, rgba(var(--v-theme-primary), 0.08), transparent 24%),
+    radial-gradient(circle at top left, rgba(var(--v-theme-primary), 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(var(--v-theme-secondary), 0.1), transparent 22%),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.18), transparent 54%),
+    radial-gradient(circle at 50% 112%, rgba(48, 57, 71, 0.2), transparent 36%),
     linear-gradient(
       180deg,
       rgb(var(--v-theme-background)) 0%,
-      rgba(var(--v-theme-primary), 0.04) 100%
+      rgba(57, 64, 74, 0.08) 72%,
+      rgba(42, 49, 58, 0.16) 100%
     );
   transition:
     background 260ms ease,
     color 260ms ease;
 }
 
+.v-application {
+  font-family:
+    "Plus Jakarta Sans",
+    "SF Pro Display",
+    "SF Pro Text",
+    "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif !important;
+}
+
+html[data-theme-mode="dark"] body {
+  background:
+    radial-gradient(circle at top left, rgba(var(--v-theme-primary), 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(var(--v-theme-secondary), 0.1), transparent 22%),
+    radial-gradient(circle at 50% 118%, rgba(0, 0, 0, 0.42), transparent 38%),
+    linear-gradient(
+      180deg,
+      rgb(var(--v-theme-background)) 0%,
+      rgba(10, 12, 16, 0.34) 72%,
+      rgba(5, 7, 11, 0.62) 100%
+    );
+}
+
 .app-main {
   min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.app-main::before,
+.app-main::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-main::before {
+  top: -12vh;
+  left: -14vw;
+  width: min(46vw, 520px);
+  height: min(46vw, 520px);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 34%, rgba(var(--v-theme-primary), 0.18), transparent 48%),
+    radial-gradient(circle at 68% 58%, rgba(var(--v-theme-secondary), 0.12), transparent 44%);
+  filter: blur(12px);
+  opacity: 0.9;
+  animation: vault-ambient-drift 18s ease-in-out infinite;
+}
+
+.app-main::after {
+  left: 0;
+  right: 0;
+  bottom: -48px;
+  height: 260px;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.42), transparent 32%),
+    radial-gradient(circle at 74% 24%, rgba(var(--v-theme-secondary), 0.12), transparent 28%),
+    linear-gradient(180deg, transparent 0%, rgba(28, 35, 44, 0.08) 72%, rgba(28, 35, 44, 0.14) 100%);
+  opacity: 0.92;
+  animation: vault-stage-glow 14s ease-in-out infinite;
+}
+
+html[data-theme-mode="dark"] .app-main::before {
+  background:
+    radial-gradient(circle at 32% 34%, rgba(var(--v-theme-primary), 0.22), transparent 48%),
+    radial-gradient(circle at 68% 58%, rgba(var(--v-theme-secondary), 0.14), transparent 44%);
+  opacity: 0.78;
+}
+
+html[data-theme-mode="dark"] .app-main::after {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.06), transparent 34%),
+    radial-gradient(circle at 72% 24%, rgba(var(--v-theme-secondary), 0.12), transparent 28%),
+    linear-gradient(180deg, transparent 0%, rgba(5, 8, 12, 0.16) 72%, rgba(5, 8, 12, 0.34) 100%);
+  opacity: 1;
 }
 
 .app-shell-wrap {
+  position: relative;
+  z-index: 1;
   transition:
     filter 320ms ease,
     transform 320ms ease,
@@ -58,16 +155,75 @@ body {
 .app-shell {
   max-width: 1440px;
   margin: 0 auto;
-  padding-top: calc(var(--host-safe-top) + 12px);
-  padding-bottom: calc(var(--host-safe-bottom) + var(--vault-bottom-nav-height) + 28px);
+  padding-top: calc(var(--host-safe-top-effective) + 12px);
+  padding-bottom: calc(var(--host-safe-bottom-effective) + var(--vault-bottom-nav-height) + 28px);
 }
 
 .border-sm {
   border: none !important;
-  background: rgba(var(--v-theme-surface), 0.78);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  box-shadow: var(--vault-shadow-soft);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 0.98),
+      rgba(var(--v-theme-surface), 0.88)
+    );
+  backdrop-filter: blur(20px) saturate(135%);
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
+  box-shadow:
+    0 18px 36px rgba(24, 33, 48, 0.08),
+    0 6px 14px rgba(24, 33, 48, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.border-sm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.28), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(var(--v-theme-primary), 0.06), transparent 30%);
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.border-sm::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    inset 0 -18px 36px rgba(20, 30, 42, 0.03);
+  pointer-events: none;
+}
+
+.v-theme--dark .border-sm {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 0.98),
+      rgba(var(--v-theme-surface), 0.9)
+    );
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.24),
+    0 6px 14px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.v-theme--dark .border-sm::before {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.06), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(var(--v-theme-primary), 0.1), transparent 30%);
+  opacity: 1;
+}
+
+.v-theme--dark .border-sm::after {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -18px 36px rgba(0, 0, 0, 0.08);
 }
 
 .v-card,
@@ -76,7 +232,8 @@ body {
 .v-list,
 .v-window,
 .v-chip,
-.v-btn-toggle {
+.v-btn-toggle,
+.v-btn {
   border-radius: var(--vault-radius) !important;
 }
 
@@ -89,7 +246,12 @@ body {
 
 .v-field--variant-solo-filled {
   box-shadow: none !important;
-  background: rgba(var(--v-theme-surface), 0.76) !important;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 0.84),
+      rgba(var(--v-theme-surface), 0.72)
+    ) !important;
 }
 
 .v-card,
@@ -105,8 +267,8 @@ body {
   transition:
     background-color 220ms ease,
     border-color 220ms ease,
-    box-shadow 220ms ease,
-    transform 220ms ease,
+    box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
     color 220ms ease,
     opacity 220ms ease,
     filter 220ms ease;
@@ -148,9 +310,84 @@ body {
   -webkit-backdrop-filter: blur(20px);
 }
 
+.vault-chip--accent {
+  background: rgba(var(--v-theme-warning), 0.16) !important;
+  color: rgb(var(--v-theme-warning)) !important;
+}
+
+.vault-chip--support {
+  background: rgba(var(--v-theme-secondary), 0.14) !important;
+  color: rgb(var(--v-theme-secondary)) !important;
+}
+
 @media (min-width: 600px) {
   .app-shell {
-    padding-top: calc(var(--host-safe-top) + 16px);
-    padding-bottom: calc(var(--host-safe-bottom) + var(--vault-bottom-nav-height) + 32px);
+    padding-top: calc(var(--host-safe-top-effective) + 16px);
+    padding-bottom: calc(var(--host-safe-bottom-effective) + var(--vault-bottom-nav-height) + 32px);
+  }
+}
+
+@keyframes vault-ambient-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(28px, 18px, 0) scale(1.08);
+  }
+}
+
+@keyframes vault-stage-glow {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.9;
+  }
+
+  50% {
+    transform: translate3d(0, -10px, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes vault-sheen {
+  0% {
+    transform: translateX(-40%) skewX(-22deg);
+    opacity: 0;
+  }
+
+  16% {
+    opacity: 0.38;
+  }
+
+  52%,
+  100% {
+    transform: translateX(112%) skewX(-22deg);
+    opacity: 0;
+  }
+}
+
+@keyframes vault-float-card {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-main::before,
+  .app-main::after,
+  .border-sm::before,
+  .v-card,
+  .v-btn,
+  .v-sheet,
+  .v-chip {
+    animation: none !important;
+    transition-duration: 0ms !important;
   }
 }

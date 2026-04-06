@@ -12,8 +12,10 @@ const FALLBACK_STATE = {
   minimizeToTrayEnabled: false,
   supportsLaunchAtStartup: false,
   launchAtStartupEnabled: false,
+  trayAutoLockMinutes: 0,
   supportsExcludeFromRecents: false,
   excludeFromRecentsEnabled: false,
+  backgroundAutoLockMinutes: 0,
   supportsAutostartSettingsShortcut: false,
   supportsWebDavSync: false,
   supportsLanSync: false,
@@ -65,8 +67,10 @@ function normalizeHostState(result = {}) {
     minimizeToTrayEnabled: Boolean(result.MinimizeToTrayEnabled),
     supportsLaunchAtStartup: Boolean(result.SupportsLaunchAtStartup),
     launchAtStartupEnabled: Boolean(result.LaunchAtStartupEnabled),
+    trayAutoLockMinutes: Number(result.TrayAutoLockMinutes || 0),
     supportsExcludeFromRecents: Boolean(result.SupportsExcludeFromRecents),
     excludeFromRecentsEnabled: Boolean(result.ExcludeFromRecentsEnabled),
+    backgroundAutoLockMinutes: Number(result.BackgroundAutoLockMinutes || 0),
     supportsAutostartSettingsShortcut: Boolean(result.SupportsAutostartSettingsShortcut),
     supportsWebDavSync: Boolean(result.SupportsWebDavSync),
     supportsLanSync: Boolean(result.SupportsLanSync),
@@ -77,8 +81,9 @@ function normalizeOperationResult(result = {}) {
   return {
     success: Boolean(result.Success),
     message: result.Message || "",
-    masterPassword: result.MasterPassword || "",
+    vaultKeyBase64: result.VaultKeyBase64 || "",
     isBiometricEnabled: Boolean(result.IsBiometricEnabled),
+    requiresManualUnlock: Boolean(result.RequiresManualUnlock),
   };
 }
 
@@ -120,6 +125,7 @@ function normalizeLanDevice(result = {}) {
     deviceName: result.DeviceName || "",
     host: result.Host || "",
     port: Number(result.Port || 0),
+    tlsFingerprintSha256: result.TlsFingerprintSha256 || "",
     snapshotAvailable: Boolean(result.SnapshotAvailable),
     isCurrentDevice: Boolean(result.IsCurrentDevice),
     exportedAt: Number(result.ExportedAt || 0),
@@ -157,6 +163,21 @@ async function invokeToggleMethod(methodName, enabled) {
       message: error?.message || "调用宿主设置失败。",
       masterPassword: "",
       isBiometricEnabled: false,
+    };
+  }
+}
+
+async function invokeDurationMethod(methodName, minutes) {
+  try {
+    const result = await invokeHost(methodName, [{ Minutes: Number(minutes || 0) }]);
+    return normalizeOperationResult(result);
+  } catch (error) {
+    return {
+      success: false,
+      message: error?.message || "调用宿主时长设置失败。",
+      vaultKeyBase64: "",
+      isBiometricEnabled: false,
+      requiresManualUnlock: false,
     };
   }
 }
@@ -311,6 +332,7 @@ export async function downloadLanSnapshotWithHost(device) {
       {
         Host: device.host,
         Port: device.port,
+        TlsFingerprintSha256: device.tlsFingerprintSha256 || "",
       },
     ]);
     return normalizeTextResult(result);
@@ -323,11 +345,12 @@ export async function downloadLanSnapshotWithHost(device) {
   }
 }
 
-export async function enableBiometricUnlock(masterPassword) {
+export async function enableBiometricUnlock(vaultKeyBase64, reauthIntervalHours) {
   try {
     const result = await invokeHost("EnableBiometricUnlock", [
       {
-        MasterPassword: masterPassword,
+        VaultKeyBase64: vaultKeyBase64,
+        ReauthIntervalHours: Number(reauthIntervalHours || 0),
       },
     ]);
 
@@ -336,8 +359,9 @@ export async function enableBiometricUnlock(masterPassword) {
     return {
       success: false,
       message: error?.message || "启用生物识别失败。",
-      masterPassword: "",
+      vaultKeyBase64: "",
       isBiometricEnabled: false,
+      requiresManualUnlock: false,
     };
   }
 }
@@ -350,8 +374,9 @@ export async function disableBiometricUnlock() {
     return {
       success: false,
       message: error?.message || "关闭生物识别失败。",
-      masterPassword: "",
+      vaultKeyBase64: "",
       isBiometricEnabled: false,
+      requiresManualUnlock: false,
     };
   }
 }
@@ -364,17 +389,20 @@ export async function unlockWithBiometric() {
     return {
       success: false,
       message: error?.message || "生物识别解锁失败。",
-      masterPassword: "",
+      vaultKeyBase64: "",
       isBiometricEnabled: false,
+      requiresManualUnlock: false,
     };
   }
 }
 
-export async function updateStoredMasterPassword(masterPassword) {
+export async function updateStoredMasterPassword(vaultKeyBase64, reauthIntervalHours, markManualUnlock = true) {
   try {
     const result = await invokeHost("UpdateStoredMasterPassword", [
       {
-        MasterPassword: masterPassword,
+        VaultKeyBase64: vaultKeyBase64,
+        ReauthIntervalHours: Number(reauthIntervalHours || 0),
+        MarkManualUnlock: Boolean(markManualUnlock),
       },
     ]);
 
@@ -383,8 +411,9 @@ export async function updateStoredMasterPassword(masterPassword) {
     return {
       success: false,
       message: error?.message || "同步主密码到原生宿主失败。",
-      masterPassword: "",
+      vaultKeyBase64: "",
       isBiometricEnabled: false,
+      requiresManualUnlock: false,
     };
   }
 }
@@ -436,8 +465,16 @@ export function setLaunchAtStartup(enabled) {
   return invokeToggleMethod("SetLaunchAtStartup", enabled);
 }
 
+export function setTrayAutoLockMinutes(minutes) {
+  return invokeDurationMethod("SetTrayAutoLockMinutes", minutes);
+}
+
 export function setExcludeFromRecents(enabled) {
   return invokeToggleMethod("SetExcludeFromRecents", enabled);
+}
+
+export function setBackgroundAutoLockMinutes(minutes) {
+  return invokeDurationMethod("SetBackgroundAutoLockMinutes", minutes);
 }
 
 export async function openAutostartSettings() {

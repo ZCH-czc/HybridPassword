@@ -6,7 +6,18 @@ import {
   createStoredPasswordRecord,
   normalizeUsername,
 } from "@/models/password-item";
-import { createVaultConfig, decryptText, encryptText, unlockVaultKey } from "@/utils/crypto";
+import {
+  createVaultConfig,
+  decryptText,
+  encryptText,
+  ensureLocalVaultWrap,
+  exportVaultConfigForSync,
+  importVaultKeyFromBase64,
+  isSecretKeyRequiredForConfig,
+  revealSecretKey,
+  rewrapVaultConfig,
+  unlockVaultKey,
+} from "@/utils/crypto";
 import { collapseImportedEntries, parseImportedEntries } from "@/utils/csv-utils";
 import {
   buildEncryptedVaultSnapshot,
@@ -54,18 +65,35 @@ export function usePasswordVault() {
   const deletedRecords = ref([]);
   const revealedPasswords = reactive({});
   const vaultConfig = ref(null);
-  const cryptoKey = shallowRef(null);
+  const vaultKey = shallowRef(null);
+  const vaultKeyBase64 = ref("");
   const state = reactive({
     bootstrapping: false,
     unlocking: false,
     unlocked: false,
     requiresSetup: false,
+    requiresSecretKeyForUnlock: false,
   });
 
   function assertUnlocked() {
-    if (!cryptoKey.value) {
-      throw new Error("请先输入主密码解锁密码库。");
+    if (!vaultKey.value || !vaultKeyBase64.value) {
+      throw new Error("请先解锁密码库。");
     }
+  }
+
+  function applyVaultSession(config, cryptoKey, keyBase64) {
+    vaultConfig.value = config;
+    vaultKey.value = cryptoKey;
+    vaultKeyBase64.value = keyBase64;
+    state.unlocked = true;
+    state.requiresSetup = false;
+    state.requiresSecretKeyForUnlock = false;
+  }
+
+  function clearVaultSession() {
+    vaultKey.value = null;
+    vaultKeyBase64.value = "";
+    state.unlocked = false;
   }
 
   function clearRevealedPasswords() {
@@ -90,6 +118,8 @@ export function usePasswordVault() {
     try {
       vaultConfig.value = await getVaultConfigRecord();
       state.requiresSetup = !vaultConfig.value;
+      state.requiresSecretKeyForUnlock =
+        !state.requiresSetup && isSecretKeyRequiredForConfig(vaultConfig.value);
     } finally {
       state.bootstrapping = false;
     }
@@ -108,30 +138,114 @@ export function usePasswordVault() {
     };
   }
 
-  async function submitMasterPassword(passphrase) {
+  async function migrateLegacyVault(passphrase, legacyCryptoKey) {
+    const allRecords = await listPasswordRecords();
+    const migratedVault = await createVaultConfig(passphrase, {
+      migratedFromVersion: vaultConfig.value?.version || 1,
+    });
+    const migratedRecords = [];
+
+    for (const record of allRecords) {
+      const plainPassword = await decryptText(record.passwordCipher, legacyCryptoKey);
+      const passwordCipher = await encryptText(plainPassword, migratedVault.vaultKey);
+
+      migratedRecords.push({
+        ...record,
+        passwordCipher,
+        updatedAt: record.updatedAt || Date.now(),
+      });
+    }
+
+    await replaceVaultSnapshotData(migratedVault.config, migratedRecords);
+    applyVaultSession(migratedVault.config, migratedVault.vaultKey, migratedVault.vaultKeyBase64);
+
+    return {
+      generatedSecretKey: migratedVault.secretKey,
+      usedRecovery: false,
+      migratedFromLegacy: true,
+    };
+  }
+
+  async function submitMasterPassword(passphrase, secretKey = "") {
     state.unlocking = true;
 
     try {
       if (state.requiresSetup) {
-        const result = await createVaultConfig(passphrase);
-        cryptoKey.value = result.cryptoKey;
-        vaultConfig.value = result.config;
-        await saveVaultConfigRecord(result.config);
-        state.requiresSetup = false;
-      } else {
-        cryptoKey.value = await unlockVaultKey(passphrase, vaultConfig.value);
+        const nextVault = await createVaultConfig(passphrase);
+        await saveVaultConfigRecord(nextVault.config);
+        applyVaultSession(nextVault.config, nextVault.vaultKey, nextVault.vaultKeyBase64);
+        await loadRecords();
+
+        return {
+          generatedSecretKey: nextVault.secretKey,
+          usedRecovery: false,
+          migratedFromLegacy: false,
+        };
       }
 
-      state.unlocked = true;
+      const unlocked = await unlockVaultKey(passphrase, vaultConfig.value, { secretKey });
+
+      if (unlocked.scheme === "legacy") {
+        const migrationResult = await migrateLegacyVault(passphrase, unlocked.vaultKey);
+        await loadRecords();
+        return migrationResult;
+      }
+
+      let nextConfig = vaultConfig.value;
+      if (unlocked.usedRecovery) {
+        nextConfig = await ensureLocalVaultWrap(passphrase, vaultConfig.value, unlocked.vaultKeyBase64);
+        if (nextConfig !== vaultConfig.value) {
+          await saveVaultConfigRecord(nextConfig);
+        }
+      }
+
+      applyVaultSession(nextConfig, unlocked.vaultKey, unlocked.vaultKeyBase64);
       await loadRecords();
+
+      return {
+        generatedSecretKey: "",
+        usedRecovery: unlocked.usedRecovery,
+        migratedFromLegacy: false,
+      };
+    } finally {
+      state.unlocking = false;
+    }
+  }
+
+  async function unlockWithVaultKeyBase64(rawVaultKeyBase64) {
+    state.unlocking = true;
+
+    try {
+      if (!vaultConfig.value || state.requiresSetup) {
+        throw new Error("The vault has not been set up yet.");
+      }
+
+      if (!rawVaultKeyBase64) {
+        throw new Error("The host did not provide a valid vault key.");
+      }
+
+      if (vaultConfig.value.version < 2) {
+        throw new Error("Biometric unlock requires the vault to be migrated first.");
+      }
+
+      const importedVaultKey = await importVaultKeyFromBase64(rawVaultKeyBase64);
+      const verificationText = await decryptText(vaultConfig.value.verification, importedVaultKey);
+
+      if (verificationText !== "password-manager-vault-check-v2") {
+        throw new Error("The stored device key is no longer valid for this vault.");
+      }
+
+      applyVaultSession(vaultConfig.value, importedVaultKey, rawVaultKeyBase64);
+      await loadRecords();
+
+      return true;
     } finally {
       state.unlocking = false;
     }
   }
 
   function lockVault() {
-    cryptoKey.value = null;
-    state.unlocked = false;
+    clearVaultSession();
     records.value = [];
     deletedRecords.value = [];
     clearRevealedPasswords();
@@ -149,7 +263,7 @@ export function usePasswordVault() {
       throw new Error("未找到指定的密码记录。");
     }
 
-    const plainPassword = await decryptText(record.passwordCipher, cryptoKey.value);
+    const plainPassword = await decryptText(record.passwordCipher, vaultKey.value);
     revealedPasswords[recordId] = plainPassword;
     return plainPassword;
   }
@@ -166,7 +280,7 @@ export function usePasswordVault() {
       throw new Error("未找到要编辑的密码记录。");
     }
 
-    const plainPassword = await decryptText(record.passwordCipher, cryptoKey.value);
+    const plainPassword = await decryptText(record.passwordCipher, vaultKey.value);
     return createDraftFromRecord(record, plainPassword);
   }
 
@@ -174,7 +288,7 @@ export function usePasswordVault() {
     assertUnlocked();
 
     const existing = draft.id ? findRecordById(draft.id) : null;
-    const passwordCipher = await encryptText(draft.password, cryptoKey.value);
+    const passwordCipher = await encryptText(draft.password, vaultKey.value);
     const storedRecord = createStoredPasswordRecord({
       id: existing?.id || draft.id,
       siteName: draft.siteName,
@@ -291,30 +405,17 @@ export function usePasswordVault() {
 
     await unlockVaultKey(currentPassphrase, vaultConfig.value);
 
-    const nextVault = await createVaultConfig(nextPassphrase);
-    const allRecords = [...records.value, ...deletedRecords.value];
-    const reEncryptedRecords = [];
-
-    for (const record of allRecords) {
-      const plainPassword = await decryptText(record.passwordCipher, cryptoKey.value);
-      const passwordCipher = await encryptText(plainPassword, nextVault.cryptoKey);
-
-      reEncryptedRecords.push({
-        ...record,
-        passwordCipher,
-        updatedAt: Date.now(),
-      });
-    }
-
-    if (reEncryptedRecords.length) {
-      await putPasswordRecords(reEncryptedRecords);
-    }
+    const secretKey = await revealSecretKey(vaultConfig.value, vaultKey.value);
+    const nextVault = await rewrapVaultConfig(
+      nextPassphrase,
+      vaultConfig.value,
+      vaultKeyBase64.value,
+      secretKey
+    );
 
     await saveVaultConfigRecord(nextVault.config);
-    vaultConfig.value = nextVault.config;
-    cryptoKey.value = nextVault.cryptoKey;
+    applyVaultSession(nextVault.config, vaultKey.value, vaultKeyBase64.value);
     clearRevealedPasswords();
-    await loadRecords();
   }
 
   async function getExportEntries() {
@@ -323,7 +424,7 @@ export function usePasswordVault() {
     const exportEntries = [];
 
     for (const record of records.value) {
-      const plainPassword = await decryptText(record.passwordCipher, cryptoKey.value);
+      const plainPassword = await decryptText(record.passwordCipher, vaultKey.value);
       exportEntries.push(createExportableEntry(record, plainPassword));
     }
 
@@ -338,7 +439,7 @@ export function usePasswordVault() {
     assertUnlocked();
 
     return buildEncryptedVaultSnapshot({
-      vaultConfig: vaultConfig.value,
+      vaultConfig: exportVaultConfigForSync(vaultConfig.value),
       records: records.value,
       deletedRecords: deletedRecords.value,
       deviceName,
@@ -353,9 +454,9 @@ export function usePasswordVault() {
 
     await replaceVaultSnapshotData(snapshot.vaultConfig, snapshot.records);
     vaultConfig.value = snapshot.vaultConfig;
-    cryptoKey.value = null;
-    state.unlocked = false;
+    clearVaultSession();
     state.requiresSetup = false;
+    state.requiresSecretKeyForUnlock = isSecretKeyRequiredForConfig(snapshot.vaultConfig);
     clearRevealedPasswords();
     await loadRecords();
 
@@ -388,7 +489,7 @@ export function usePasswordVault() {
         continue;
       }
 
-      const passwordCipher = await encryptText(entry.password, cryptoKey.value);
+      const passwordCipher = await encryptText(entry.password, vaultKey.value);
       const mergedRecord = createStoredPasswordRecord({
         id: existing?.id,
         siteName: entry.siteName,
@@ -424,6 +525,16 @@ export function usePasswordVault() {
     };
   }
 
+  async function getSecretKey() {
+    assertUnlocked();
+    return revealSecretKey(vaultConfig.value, vaultKey.value);
+  }
+
+  function getVaultKeyBase64() {
+    assertUnlocked();
+    return vaultKeyBase64.value;
+  }
+
   return {
     records,
     deletedRecords,
@@ -437,11 +548,14 @@ export function usePasswordVault() {
     decryptPasswordById,
     getEncryptedSnapshot,
     getExportEntries,
+    getSecretKey,
     getSyncPreview,
+    getVaultKeyBase64,
     hidePassword,
     importEntriesFromCsvText,
     loadRecords,
     lockVault,
+    unlockWithVaultKeyBase64,
     permanentlyDeleteRecord,
     removeRecord,
     removeRecords,

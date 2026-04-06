@@ -29,9 +29,11 @@ public sealed class PasswordVaultHostBridge
         return state;
     }
 
-    public Task<HostOperationResult> EnableBiometricUnlock(StoreMasterPasswordRequest request)
+    public Task<HostOperationResult> EnableBiometricUnlock(StoreVaultKeyRequest request)
     {
-        return _biometricUnlockService.EnableAsync(request?.MasterPassword ?? string.Empty);
+        return _biometricUnlockService.EnableAsync(
+            request?.VaultKeyBase64 ?? string.Empty,
+            request?.ReauthIntervalHours ?? 0);
     }
 
     public Task<HostOperationResult> DisableBiometricUnlock()
@@ -44,9 +46,12 @@ public sealed class PasswordVaultHostBridge
         return _biometricUnlockService.UnlockAsync();
     }
 
-    public Task<HostOperationResult> UpdateStoredMasterPassword(StoreMasterPasswordRequest request)
+    public Task<HostOperationResult> UpdateStoredMasterPassword(StoreVaultKeyRequest request)
     {
-        return _biometricUnlockService.UpdateStoredMasterPasswordAsync(request?.MasterPassword ?? string.Empty);
+        return _biometricUnlockService.UpdateStoredVaultKeyAsync(
+            request?.VaultKeyBase64 ?? string.Empty,
+            request?.ReauthIntervalHours ?? 0,
+            request?.MarkManualUnlock ?? true);
     }
 
     public Task<HostFileOperationResult> SaveTextFile(SaveTextFileRequest request)
@@ -72,9 +77,19 @@ public sealed class PasswordVaultHostBridge
         return _hostPlatformService.SetLaunchAtStartupAsync(request?.Enabled ?? false);
     }
 
+    public Task<HostOperationResult> SetTrayAutoLockMinutes(DurationSettingRequest request)
+    {
+        return _hostPlatformService.SetTrayAutoLockMinutesAsync(request?.Minutes ?? 0);
+    }
+
     public Task<HostOperationResult> SetExcludeFromRecents(ToggleSettingRequest request)
     {
         return _hostPlatformService.SetExcludeFromRecentsAsync(request?.Enabled ?? false);
+    }
+
+    public Task<HostOperationResult> SetBackgroundAutoLockMinutes(DurationSettingRequest request)
+    {
+        return _hostPlatformService.SetBackgroundAutoLockMinutesAsync(request?.Minutes ?? 0);
     }
 
     public Task<HostOperationResult> OpenAutostartSettings()

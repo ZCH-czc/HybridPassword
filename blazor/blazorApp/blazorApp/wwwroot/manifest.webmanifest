@@ -1,0 +1,26 @@
+{
+  "name": "Password Vault",
+  "short_name": "Vault",
+  "description": "A local-first encrypted password manager built with Vue and Vuetify.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#efebe4",
+  "theme_color": "#156FD6",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "./appicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./appicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

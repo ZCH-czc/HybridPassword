@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.NetworkInformation;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Maui.Devices;
@@ -18,6 +22,8 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
     private const string WebDavHasPasswordKey = "password_vault.sync.webdav.has_password";
     private const string DeviceIdKey = "password_vault.sync.device_id";
     private const string DeviceNameKey = "password_vault.sync.device_name";
+    private const string LanTlsCertificateKey = "password_vault.sync.lan.tls.certificate";
+    private const string LanTlsCertificatePasswordKey = "password_vault.sync.lan.tls.password";
     private const int SnapshotPort = 49321;
     private const int DiscoveryPort = 49322;
     private const string DiscoveryMessage = "PASSWORD_VAULT_DISCOVER_V1";
@@ -26,6 +32,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
 
     private readonly object _snapshotLock = new();
     private readonly CancellationTokenSource _lifetimeCts = new();
+    private readonly SemaphoreSlim _certificateLock = new(1, 1);
 
     private TcpListener? _snapshotListener;
     private Task? _snapshotServerTask;
@@ -35,6 +42,8 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
     private string _publishedSnapshot = string.Empty;
     private SyncPreview _publishedPreview = new();
     private long _publishedAt;
+    private X509Certificate2? _snapshotCertificate;
+    private string _snapshotCertificateFingerprint = string.Empty;
 
     public HostSyncService()
     {
@@ -82,16 +91,12 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             return new HostOperationResult
             {
                 Success = true,
-                Message = "WebDAV 配置已保存。",
+                Message = "WebDAV configuration saved.",
             };
         }
         catch (Exception ex)
         {
-            return new HostOperationResult
-            {
-                Success = false,
-                Message = $"保存 WebDAV 配置失败：{ex.Message}",
-            };
+            return BuildFailure($"Unable to save the WebDAV configuration: {ex.Message}");
         }
     }
 
@@ -102,7 +107,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             var content = request?.Content ?? string.Empty;
             if (string.IsNullOrWhiteSpace(content))
             {
-                return BuildFailure("当前没有可上传的同步数据。");
+                return BuildFailure("There is no encrypted snapshot to upload.");
             }
 
             using var client = await CreateWebDavClientAsync();
@@ -114,18 +119,18 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             using var response = await client.SendAsync(message, _lifetimeCts.Token);
             if (!response.IsSuccessStatusCode)
             {
-                return BuildFailure($"WebDAV 上传失败：{(int)response.StatusCode} {response.ReasonPhrase}");
+                return BuildFailure($"WebDAV upload failed: {(int)response.StatusCode} {response.ReasonPhrase}");
             }
 
             return new HostOperationResult
             {
                 Success = true,
-                Message = "当前数据已上传到 WebDAV。",
+                Message = "Current data uploaded to WebDAV.",
             };
         }
         catch (Exception ex)
         {
-            return BuildFailure($"WebDAV 上传失败：{ex.Message}");
+            return BuildFailure($"WebDAV upload failed: {ex.Message}");
         }
     }
 
@@ -141,14 +146,14 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
                 return new HostTextOperationResult
                 {
                     Success = false,
-                    Message = $"WebDAV 下载失败：{(int)response.StatusCode} {response.ReasonPhrase}",
+                    Message = $"WebDAV download failed: {(int)response.StatusCode} {response.ReasonPhrase}",
                 };
             }
 
             return new HostTextOperationResult
             {
                 Success = true,
-                Message = "已从 WebDAV 拉取同步数据。",
+                Message = "Encrypted sync snapshot downloaded from WebDAV.",
                 Content = await response.Content.ReadAsStringAsync(_lifetimeCts.Token),
             };
         }
@@ -157,7 +162,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             return new HostTextOperationResult
             {
                 Success = false,
-                Message = $"WebDAV 下载失败：{ex.Message}",
+                Message = $"WebDAV download failed: {ex.Message}",
             };
         }
     }
@@ -168,7 +173,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
 
         if (request is null || string.IsNullOrWhiteSpace(request.SnapshotContent))
         {
-            return Task.FromResult(BuildFailure("当前没有可发布的局域网同步数据。"));
+            return Task.FromResult(BuildFailure("There is no encrypted LAN snapshot to publish."));
         }
 
         if (!string.IsNullOrWhiteSpace(request.DeviceName))
@@ -186,7 +191,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
         return Task.FromResult(new HostOperationResult
         {
             Success = true,
-            Message = "当前设备数据已发布到局域网同步通道。",
+            Message = "The encrypted snapshot is available on the local network over TLS.",
         });
     }
 
@@ -197,7 +202,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
         return Task.FromResult(new HostOperationResult
         {
             Success = true,
-            Message = "设备名称已更新。",
+            Message = "Device name updated.",
         });
     }
 
@@ -268,19 +273,34 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             return new HostTextOperationResult
             {
                 Success = false,
-                Message = "目标设备信息不完整，无法拉取同步数据。",
+                Message = "The selected device address is incomplete.",
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(request.TlsFingerprintSha256))
+        {
+            return new HostTextOperationResult
+            {
+                Success = false,
+                Message = "The selected device did not provide a TLS fingerprint.",
             };
         }
 
         try
         {
-            using var client = new HttpClient
+            using var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
+                    ValidateFingerprint(certificate, request.TlsFingerprintSha256),
+            };
+
+            using var client = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromSeconds(10),
             };
 
-            var response = await client.GetAsync(
-                new Uri($"http://{request.Host}:{request.Port}/snapshot"),
+            using var response = await client.GetAsync(
+                new Uri($"https://{request.Host}:{request.Port}/snapshot"),
                 _lifetimeCts.Token);
 
             if (!response.IsSuccessStatusCode)
@@ -288,14 +308,14 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
                 return new HostTextOperationResult
                 {
                     Success = false,
-                    Message = $"从局域网设备拉取失败：{(int)response.StatusCode} {response.ReasonPhrase}",
+                    Message = $"LAN snapshot download failed: {(int)response.StatusCode} {response.ReasonPhrase}",
                 };
             }
 
             return new HostTextOperationResult
             {
                 Success = true,
-                Message = "已从局域网设备拉取同步数据。",
+                Message = "Encrypted sync snapshot downloaded from the selected device.",
                 Content = await response.Content.ReadAsStringAsync(_lifetimeCts.Token),
             };
         }
@@ -304,7 +324,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             return new HostTextOperationResult
             {
                 Success = false,
-                Message = $"从局域网设备拉取失败：{ex.Message}",
+                Message = $"LAN snapshot download failed: {ex.Message}",
             };
         }
     }
@@ -329,10 +349,12 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
         {
         }
 
+        _snapshotCertificate?.Dispose();
+        _certificateLock.Dispose();
         _lifetimeCts.Dispose();
     }
 
-    private HostOperationResult BuildFailure(string message)
+    private static HostOperationResult BuildFailure(string message)
     {
         return new HostOperationResult
         {
@@ -366,6 +388,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             _snapshotListener = new TcpListener(IPAddress.Any, 0);
             _snapshotListener.Start();
         }
+
         _boundSnapshotPort = ((IPEndPoint)_snapshotListener.LocalEndpoint).Port;
         _snapshotServerTask = Task.Run(() => RunSnapshotServerAsync(_lifetimeCts.Token));
     }
@@ -401,8 +424,21 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
 
         try
         {
-            using var stream = client.GetStream();
-            using var reader = new StreamReader(stream, Encoding.UTF8, false, 1024, leaveOpen: true);
+            await using var networkStream = client.GetStream();
+            using var sslStream = new SslStream(networkStream, false);
+            var certificate = await GetOrCreateSnapshotCertificateAsync();
+
+            await sslStream.AuthenticateAsServerAsync(
+                new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = certificate,
+                    ClientCertificateRequired = false,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                },
+                cancellationToken);
+
+            using var reader = new StreamReader(sslStream, Encoding.UTF8, false, 1024, leaveOpen: true);
 
             var requestLine = await reader.ReadLineAsync();
             if (string.IsNullOrWhiteSpace(requestLine))
@@ -419,13 +455,25 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             var parts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2 || !string.Equals(parts[0], "GET", StringComparison.OrdinalIgnoreCase))
             {
-                await WriteHttpResponseAsync(stream, 405, "Method Not Allowed", "text/plain", "Only GET is supported.", cancellationToken);
+                await WriteHttpResponseAsync(
+                    sslStream,
+                    405,
+                    "Method Not Allowed",
+                    "text/plain; charset=utf-8",
+                    "Only GET is supported.",
+                    cancellationToken);
                 return;
             }
 
             if (!string.Equals(parts[1], "/snapshot", StringComparison.OrdinalIgnoreCase))
             {
-                await WriteHttpResponseAsync(stream, 404, "Not Found", "text/plain", "Not found.", cancellationToken);
+                await WriteHttpResponseAsync(
+                    sslStream,
+                    404,
+                    "Not Found",
+                    "text/plain; charset=utf-8",
+                    "Not found.",
+                    cancellationToken);
                 return;
             }
 
@@ -437,11 +485,23 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
 
             if (string.IsNullOrWhiteSpace(snapshot))
             {
-                await WriteHttpResponseAsync(stream, 503, "Service Unavailable", "text/plain", "No snapshot published.", cancellationToken);
+                await WriteHttpResponseAsync(
+                    sslStream,
+                    503,
+                    "Service Unavailable",
+                    "text/plain; charset=utf-8",
+                    "No snapshot published.",
+                    cancellationToken);
                 return;
             }
 
-            await WriteHttpResponseAsync(stream, 200, "OK", "application/json; charset=utf-8", snapshot, cancellationToken);
+            await WriteHttpResponseAsync(
+                sslStream,
+                200,
+                "OK",
+                "application/json; charset=utf-8",
+                snapshot,
+                cancellationToken);
         }
         catch
         {
@@ -449,7 +509,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
     }
 
     private static async Task WriteHttpResponseAsync(
-        NetworkStream stream,
+        Stream stream,
         int statusCode,
         string statusText,
         string contentType,
@@ -497,7 +557,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
                     continue;
                 }
 
-                var summary = BuildLocalLanSummary();
+                var summary = await BuildLocalLanSummaryAsync();
                 var payload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(summary, JsonOptions));
                 await _discoveryResponder.SendAsync(payload, payload.Length, result.RemoteEndPoint);
             }
@@ -511,7 +571,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
         }
     }
 
-    private LanDeviceSummary BuildLocalLanSummary()
+    private async Task<LanDeviceSummary> BuildLocalLanSummaryAsync()
     {
         SyncPreview preview;
         var snapshotAvailable = false;
@@ -532,6 +592,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
             Port = _boundSnapshotPort,
             SnapshotAvailable = snapshotAvailable,
             ExportedAt = exportedAt,
+            TlsFingerprintSha256 = await GetSnapshotCertificateFingerprintAsync(),
             Preview = preview,
         };
     }
@@ -572,12 +633,12 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
 
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            throw new InvalidOperationException("请先填写 WebDAV 地址。");
+            throw new InvalidOperationException("Please enter the WebDAV URL first.");
         }
 
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
         {
-            throw new InvalidOperationException("WebDAV 地址格式不正确。");
+            throw new InvalidOperationException("The WebDAV URL is invalid.");
         }
 
         if (string.IsNullOrWhiteSpace(remotePath))
@@ -625,14 +686,14 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
 
     private string GetDefaultDeviceName()
     {
-        var platformName = "当前设备";
+        var platformName = "Current device";
         if (DeviceInfo.Current.Platform == DevicePlatform.WinUI)
         {
-            platformName = "Windows 设备";
+            platformName = "Windows device";
         }
         else if (DeviceInfo.Current.Platform == DevicePlatform.Android)
         {
-            platformName = "Android 设备";
+            platformName = "Android device";
         }
 
         var rawName = DeviceInfo.Current.Name?.Trim();
@@ -650,6 +711,152 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
         var value = Guid.NewGuid().ToString("N");
         Preferences.Default.Set(DeviceIdKey, value);
         return value;
+    }
+
+    private async Task<string> GetSnapshotCertificateFingerprintAsync()
+    {
+        var certificate = await GetOrCreateSnapshotCertificateAsync();
+        _snapshotCertificateFingerprint = ComputeFingerprint(certificate);
+        return _snapshotCertificateFingerprint;
+    }
+
+    private async Task<X509Certificate2> GetOrCreateSnapshotCertificateAsync()
+    {
+        if (_snapshotCertificate is not null)
+        {
+            return _snapshotCertificate;
+        }
+
+        await _certificateLock.WaitAsync(_lifetimeCts.Token);
+        try
+        {
+            if (_snapshotCertificate is not null)
+            {
+                return _snapshotCertificate;
+            }
+
+            var storedCertificate = string.Empty;
+            var storedPassword = string.Empty;
+
+            try
+            {
+                storedCertificate = await SecureStorage.Default.GetAsync(LanTlsCertificateKey) ?? string.Empty;
+                storedPassword = await SecureStorage.Default.GetAsync(LanTlsCertificatePasswordKey) ?? string.Empty;
+            }
+            catch
+            {
+            }
+
+            if (!string.IsNullOrWhiteSpace(storedCertificate) && !string.IsNullOrWhiteSpace(storedPassword))
+            {
+                try
+                {
+                    var pfxBytes = Convert.FromBase64String(storedCertificate);
+                    _snapshotCertificate = new X509Certificate2(
+                        pfxBytes,
+                        storedPassword,
+                        X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+                }
+                catch
+                {
+                    SecureStorage.Default.Remove(LanTlsCertificateKey);
+                    SecureStorage.Default.Remove(LanTlsCertificatePasswordKey);
+                    _snapshotCertificate = null;
+                }
+            }
+
+            if (_snapshotCertificate is null)
+            {
+                using var rsa = RSA.Create(2048);
+                var request = new CertificateRequest(
+                    $"CN=PasswordVault-{GetOrCreateDeviceId()}",
+                    rsa,
+                    HashAlgorithmName.SHA256,
+                    RSASignaturePadding.Pkcs1);
+
+                request.CertificateExtensions.Add(
+                    new X509BasicConstraintsExtension(false, false, 0, false));
+                request.CertificateExtensions.Add(
+                    new X509KeyUsageExtension(
+                        X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment,
+                        false));
+                request.CertificateExtensions.Add(
+                    new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+
+                var sanBuilder = new SubjectAlternativeNameBuilder();
+                sanBuilder.AddDnsName("localhost");
+                sanBuilder.AddIpAddress(IPAddress.Loopback);
+                try
+                {
+                    sanBuilder.AddIpAddress(IPAddress.IPv6Loopback);
+                }
+                catch
+                {
+                }
+
+                request.CertificateExtensions.Add(sanBuilder.Build());
+
+                using var generatedCertificate = request.CreateSelfSigned(
+                    DateTimeOffset.UtcNow.AddDays(-1),
+                    DateTimeOffset.UtcNow.AddYears(5));
+
+                var exportPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
+                var exportedPfx = generatedCertificate.Export(X509ContentType.Pfx, exportPassword);
+
+                try
+                {
+                    await SecureStorage.Default.SetAsync(
+                        LanTlsCertificateKey,
+                        Convert.ToBase64String(exportedPfx));
+                    await SecureStorage.Default.SetAsync(
+                        LanTlsCertificatePasswordKey,
+                        exportPassword);
+                }
+                catch
+                {
+                }
+
+                _snapshotCertificate = new X509Certificate2(
+                    exportedPfx,
+                    exportPassword,
+                    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+            }
+
+            _snapshotCertificateFingerprint = ComputeFingerprint(_snapshotCertificate);
+            return _snapshotCertificate;
+        }
+        finally
+        {
+            _certificateLock.Release();
+        }
+    }
+
+    private static string ComputeFingerprint(X509Certificate2 certificate)
+    {
+        return Convert.ToHexString(SHA256.HashData(certificate.RawData));
+    }
+
+    private static bool ValidateFingerprint(X509Certificate? certificate, string expectedFingerprint)
+    {
+        if (certificate is null || string.IsNullOrWhiteSpace(expectedFingerprint))
+        {
+            return false;
+        }
+
+        using var certificate2 = certificate as X509Certificate2 ?? new X509Certificate2(certificate);
+        var actualFingerprint = ComputeFingerprint(certificate2);
+        return string.Equals(
+            NormalizeFingerprint(actualFingerprint),
+            NormalizeFingerprint(expectedFingerprint),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeFingerprint(string value)
+    {
+        return string.Concat(
+            (value ?? string.Empty)
+                .ToUpperInvariant()
+                .Where(character => !char.IsWhiteSpace(character) && character != ':'));
     }
 
     private static IEnumerable<IPEndPoint> GetBroadcastEndpoints()

@@ -10,7 +10,11 @@ public interface IHostPlatformService
 
     Task<HostOperationResult> SetLaunchAtStartupAsync(bool enabled);
 
+    Task<HostOperationResult> SetTrayAutoLockMinutesAsync(int minutes);
+
     Task<HostOperationResult> SetExcludeFromRecentsAsync(bool enabled);
+
+    Task<HostOperationResult> SetBackgroundAutoLockMinutesAsync(int minutes);
 
     Task<HostOperationResult> OpenAutostartSettingsAsync();
 }

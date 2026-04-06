@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useAppPreferences } from "@/composables/useAppPreferences";
 
 const props = defineProps({
@@ -27,15 +27,25 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  requiresSecretKey: {
+    type: Boolean,
+    default: false,
+  },
+  secretKeyHint: {
+    type: String,
+    default: "",
+  },
 });
 
 const emit = defineEmits(["submit", "biometric-unlock"]);
 const formRef = ref(null);
+const passphraseFieldRef = ref(null);
 const { t } = useAppPreferences();
 
 const formState = reactive({
   passphrase: "",
   confirmPassphrase: "",
+  secretKey: "",
   reveal: false,
 });
 
@@ -54,7 +64,18 @@ async function handleSubmit() {
     return;
   }
 
-  emit("submit", formState.passphrase);
+  emit("submit", {
+    passphrase: formState.passphrase,
+    secretKey: formState.secretKey,
+  });
+}
+
+async function focusPassphraseField() {
+  await nextTick();
+
+  setTimeout(() => {
+    passphraseFieldRef.value?.focus?.();
+  }, 120);
 }
 
 watch(
@@ -62,7 +83,12 @@ watch(
   () => {
     formState.passphrase = "";
     formState.confirmPassphrase = "";
+    formState.secretKey = "";
     formState.reveal = false;
+
+    if (props.modelValue) {
+      void focusPassphraseField();
+    }
   }
 );
 </script>
@@ -90,14 +116,37 @@ watch(
         </div>
 
         <v-form ref="formRef" @submit.prevent="handleSubmit">
+          <v-sheet
+            v-if="!isSetup && requiresSecretKey"
+            class="rounded-xl px-4 py-3 mb-4 bg-surface-variant text-body-2 text-medium-emphasis"
+          >
+            <div>{{ t("master.secretKeyRequired") }}</div>
+            <div v-if="secretKeyHint" class="mt-1">
+              {{ t("master.secretKeyHint", { hint: secretKeyHint }) }}
+            </div>
+          </v-sheet>
+
           <v-text-field
+            ref="passphraseFieldRef"
             v-model="formState.passphrase"
             :type="formState.reveal ? 'text' : 'password'"
             :label="t('master.passphrase')"
             prepend-inner-icon="mdi-lock-outline"
             :append-inner-icon="formState.reveal ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
             :rules="[requiredRule, minLengthRule]"
+            autofocus
             @click:append-inner="formState.reveal = !formState.reveal"
+          />
+
+          <v-text-field
+            v-if="!isSetup && requiresSecretKey"
+            v-model="formState.secretKey"
+            :label="t('master.secretKey')"
+            prepend-inner-icon="mdi-key-variant"
+            :rules="[requiredRule]"
+            autocapitalize="characters"
+            autocomplete="one-time-code"
+            spellcheck="false"
           />
 
           <v-text-field

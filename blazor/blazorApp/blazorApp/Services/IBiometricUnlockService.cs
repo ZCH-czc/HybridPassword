@@ -4,11 +4,14 @@ public interface IBiometricUnlockService
 {
     Task<HostBridgeState> GetBridgeStateAsync();
 
-    Task<HostOperationResult> EnableAsync(string masterPassword);
+    Task<HostOperationResult> EnableAsync(string vaultKeyBase64, int reauthIntervalHours);
 
     Task<HostOperationResult> DisableAsync();
 
     Task<HostOperationResult> UnlockAsync();
 
-    Task<HostOperationResult> UpdateStoredMasterPasswordAsync(string masterPassword);
+    Task<HostOperationResult> UpdateStoredVaultKeyAsync(
+        string vaultKeyBase64,
+        int reauthIntervalHours,
+        bool markManualUnlock);
 }

@@ -53,7 +53,7 @@ const sectionTitle = computed(() =>
 );
 
 function previewPassword(recordId) {
-  return props.revealedPasswords[recordId] || "••••••••••";
+  return props.revealedPasswords[recordId] || "************";
 }
 </script>
 
@@ -90,7 +90,7 @@ function previewPassword(recordId) {
             </div>
 
             <div class="d-flex align-center ga-3 mt-5">
-              <v-avatar color="primary" variant="tonal">
+              <v-avatar color="secondary" variant="tonal">
                 <v-icon>mdi-shield-check-outline</v-icon>
               </v-avatar>
               <div>
@@ -112,7 +112,7 @@ function previewPassword(recordId) {
     <v-card class="border-sm">
       <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
         <span>{{ t("home.favorites") }}</span>
-        <v-chip color="primary" variant="tonal">{{ t("common.countItems", { count: favoriteItems.length }) }}</v-chip>
+        <v-chip color="warning" variant="tonal">{{ t("common.countItems", { count: favoriteItems.length }) }}</v-chip>
       </v-card-title>
       <v-card-text class="pa-4">
         <div v-if="!favoriteItems.length" class="py-8 text-center">
@@ -131,7 +131,7 @@ function previewPassword(recordId) {
           >
             <div class="d-flex align-center justify-space-between ga-2">
               <div class="d-flex align-center ga-3 min-w-0">
-                <v-avatar color="primary" variant="tonal" size="38">
+                <v-avatar color="warning" variant="tonal" size="38">
                   {{ (item.siteName || item.username || "P").slice(0, 1).toUpperCase() }}
                 </v-avatar>
                 <div class="min-w-0">
@@ -151,7 +151,7 @@ function previewPassword(recordId) {
                 :loading="Boolean(favoriteIds[item.id])"
                 @click="emit('toggle-favorite', item.id)"
               >
-                <v-icon>mdi-star</v-icon>
+                <v-icon color="warning">mdi-star</v-icon>
               </v-btn>
             </div>
 
@@ -191,7 +191,7 @@ function previewPassword(recordId) {
               >
                 <div class="d-flex align-start justify-space-between ga-3">
                   <div class="d-flex align-center ga-3 min-w-0">
-                    <v-avatar color="primary" variant="tonal" size="42">
+                    <v-avatar color="secondary" variant="tonal" size="42">
                       {{ (item.siteName || item.username || "P").slice(0, 1).toUpperCase() }}
                     </v-avatar>
 
@@ -200,7 +200,7 @@ function previewPassword(recordId) {
                         <div class="text-subtitle-1 font-weight-medium text-truncate">
                           {{ item.siteName || t("common.unnamedEntry") }}
                         </div>
-                        <v-icon v-if="item.isFavorite" color="primary" size="18">
+                        <v-icon v-if="item.isFavorite" color="warning" size="18">
                           mdi-star
                         </v-icon>
                       </div>
@@ -246,7 +246,7 @@ function previewPassword(recordId) {
 
                 <div class="d-flex flex-wrap align-center justify-space-between ga-3 mt-3">
                   <div class="d-flex flex-wrap ga-2">
-                    <v-chip size="small" variant="tonal" color="primary">
+                    <v-chip size="small" variant="tonal" color="secondary">
                       {{ t("common.countNotes", { count: item.notes.length }) }}
                     </v-chip>
                     <v-chip size="small" variant="flat">
@@ -282,25 +282,69 @@ function previewPassword(recordId) {
 
 <style scoped>
 .hero-panel {
+  position: relative;
+  isolation: isolate;
   background:
-    radial-gradient(circle at top left, rgba(26, 115, 232, 0.18), transparent 38%),
-    radial-gradient(circle at bottom right, rgba(137, 180, 250, 0.35), transparent 40%),
+    radial-gradient(circle at top left, rgba(var(--v-theme-primary), 0.2), transparent 36%),
+    radial-gradient(circle at top right, rgba(var(--v-theme-secondary), 0.14), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(var(--v-theme-warning), 0.14), transparent 34%),
     linear-gradient(
       135deg,
-      rgba(var(--v-theme-surface), 0.98),
-      rgba(var(--v-theme-surface), 0.88)
+      rgba(var(--v-theme-surface), 1),
+      rgba(var(--v-theme-surface), 0.9)
     );
 }
 
+.hero-panel::before,
+.hero-panel::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.hero-panel::before {
+  inset: -10% auto auto -8%;
+  width: 42%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.46), transparent 58%);
+  filter: blur(10px);
+  opacity: 0.86;
+  animation: vault-ambient-drift 16s ease-in-out infinite;
+}
+
+.hero-panel::after {
+  inset: auto -8% -36% auto;
+  width: 44%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--v-theme-secondary), 0.2), transparent 58%);
+  filter: blur(18px);
+  opacity: 0.42;
+}
+
 .hero-copy {
+  position: relative;
+  z-index: 1;
   max-width: 720px;
 }
 
 .hero-side {
+  position: relative;
+  z-index: 1;
   min-width: min(100%, 320px);
-  background: rgba(var(--v-theme-surface), 0.62);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 0.92),
+      rgba(var(--v-theme-surface), 0.76)
+    );
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  animation: vault-float-card 10s ease-in-out infinite;
+  box-shadow:
+    0 16px 30px rgba(22, 32, 46, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .min-w-0 {
@@ -309,25 +353,59 @@ function previewPassword(recordId) {
 
 .favorite-tile,
 .recent-tile {
+  position: relative;
+  overflow: hidden;
   transition:
-    transform 240ms ease,
-    box-shadow 240ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 240ms ease;
 }
 
 .favorite-tile {
   width: min(100%, 280px);
-  background: linear-gradient(
-    180deg,
-    rgba(var(--v-theme-surface), 0.96),
-    rgba(var(--v-theme-surface), 0.84)
-  );
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 1),
+      rgba(var(--v-theme-surface), 0.88)
+    ),
+    radial-gradient(circle at top right, rgba(var(--v-theme-warning), 0.14), transparent 42%);
+  box-shadow:
+    0 12px 24px rgba(22, 32, 46, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.favorite-tile::before,
+.recent-tile::before {
+  content: "";
+  position: absolute;
+  inset: auto -12% 42% 24%;
+  height: 44%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  transform: translateX(-44%) skewX(-20deg);
+  filter: blur(10px);
+  opacity: 0;
+  animation: vault-sheen 13s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.recent-tile {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 0.98),
+      rgba(var(--v-theme-surface), 0.86)
+    ),
+    radial-gradient(circle at top right, rgba(var(--v-theme-secondary), 0.12), transparent 42%);
+  box-shadow:
+    0 12px 24px rgba(22, 32, 46, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.44);
 }
 
 .favorite-tile:hover,
 .recent-tile:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 32px rgba(20, 34, 58, 0.08);
+  transform: translateY(-4px) scale(1.004);
+  box-shadow: 0 18px 34px rgba(20, 34, 58, 0.1);
 }
 
 .password-preview {

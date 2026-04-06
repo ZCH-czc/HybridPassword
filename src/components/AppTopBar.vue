@@ -44,7 +44,7 @@ const searchLabel = computed(() =>
       color="primary"
       prepend-icon="mdi-plus"
       height="56"
-      class="px-5"
+      class="px-5 top-bar-create"
       :disabled="disabled"
       @click="emit('create')"
     >
@@ -75,10 +75,29 @@ const searchLabel = computed(() =>
 
 :deep(.top-bar-search .v-field) {
   min-height: 56px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--v-theme-surface), 0.82),
+      rgba(var(--v-theme-surface), 0.68)
+    ) !important;
+  box-shadow:
+    var(--vault-shadow-soft),
+    inset 0 1px 0 var(--vault-glass-highlight);
 }
 
 .top-bar-lock {
   align-self: center;
+  background: rgba(var(--v-theme-surface), 0.52);
+  box-shadow:
+    var(--vault-shadow-soft),
+    inset 0 1px 0 var(--vault-glass-highlight);
+}
+
+.top-bar-create {
+  box-shadow:
+    0 14px 28px rgba(47, 111, 237, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 @media (max-width: 680px) {

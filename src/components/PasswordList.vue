@@ -78,7 +78,7 @@ const bulkFavoriteLabel = computed(() => {
     <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
       <div class="d-flex align-center ga-3">
         <span>{{ t("list.savedPasswords") }}</span>
-        <v-chip color="primary" variant="tonal">{{ t("common.countItems", { count: items.length }) }}</v-chip>
+        <v-chip variant="tonal" color="secondary">{{ t("common.countItems", { count: items.length }) }}</v-chip>
         <v-chip v-if="selectionMode" variant="tonal" color="secondary">
           {{ t("list.selectedCount", { count: selectedCount }) }}
         </v-chip>
@@ -90,7 +90,8 @@ const bulkFavoriteLabel = computed(() => {
             {{ allSelected ? t("list.unselectAll") : t("list.selectAll") }}
           </v-btn>
           <v-btn
-            variant="text"
+            variant="tonal"
+            color="warning"
             :disabled="!selectedCount || bulkLoading"
             @click="emit('bulk-favorite')"
           >
