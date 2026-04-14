@@ -13,6 +13,23 @@ The app stores encrypted vault data locally in `IndexedDB`, uses the `Web Crypto
 
 ## Release Notes
 
+### v2.0.0
+
+`v2.0.0` is the first release that turns Password Vault Hybrid into a broader desktop-grade vault experience. This version focuses on smoother day-to-day use, stronger migration support, better diagnostics, and the first serious Windows-only groundwork for future passkey takeover support. It also upgrades the Windows packaging flow so the main app and the passkey companion can ship together in one installer.
+
+Highlights in `v2.0.0`:
+
+- Refined the app structure, onboarding flow, and first-use guidance across Home / List / Settings
+- Added persistent application logs with an export action under `About -> Application logs`
+- Improved `1Password 1PUX / CSV` import, including better custom-field capture and a persistent review queue for items that need manual handling
+- Added manual follow-up tools for ignored or incompatible import items so users can recover data instead of losing it when a review dialog is closed
+- Improved recently deleted management with batch restore and batch permanent delete in settings
+- Optimized vault list loading with asynchronous IndexedDB reads, incremental hydration, and lazy rendering for larger datasets
+- Continued the Windows-only passkey track with metadata management, diagnostics, a background companion process, and plugin-registration / callback skeletons
+- Added a dedicated passkey status surface so advanced plugin and companion diagnostics are separated from the user-facing passkey list
+- Bundled the Windows passkey companion into the Windows installer flow so the setup package ships the app and companion together
+- Extended WebDAV and LAN sync UX with incremental review flows and clearer conflict handling
+
 ### v1.1.0
 
 `v1.1.0` was the first major security and host-integration milestone for Password Vault Hybrid. This release introduced the new `Secret Key`-based vault protection model, improved biometric unlock so the host stores a protected vault-unlock artifact instead of relying on the web layer to keep the master password, added configurable biometric re-auth intervals, upgraded LAN sync to a TLS-protected flow, and improved Windows / Android host behavior with safer auto-lock handling, system notifications, and mobile safe-area fixes. It also refined the app structure and onboarding experience so the product felt more complete and reliable across hybrid host environments.
