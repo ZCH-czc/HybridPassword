@@ -6,6 +6,8 @@ public interface IHostPlatformService
 
     Task EnrichHostBridgeStateAsync(HostBridgeState state);
 
+    Task<HostOperationResult> ResetPlatformStateAsync();
+
     Task<HostOperationResult> SetMinimizeToTrayAsync(bool enabled);
 
     Task<HostOperationResult> SetLaunchAtStartupAsync(bool enabled);
@@ -17,4 +19,6 @@ public interface IHostPlatformService
     Task<HostOperationResult> SetBackgroundAutoLockMinutesAsync(int minutes);
 
     Task<HostOperationResult> OpenAutostartSettingsAsync();
+
+    Task<HostOperationResult> OpenExternalUrlAsync(string url);
 }

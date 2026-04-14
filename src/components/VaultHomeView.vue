@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import InlineSvgIcon from "@/components/InlineSvgIcon.vue";
 import { useAppPreferences } from "@/composables/useAppPreferences";
 import PasswordGeneratorCard from "@/components/PasswordGeneratorCard.vue";
 import PasswordSummaryBar from "@/components/PasswordSummaryBar.vue";
@@ -69,14 +70,25 @@ function previewPassword(recordId) {
               {{ t("home.subtitle") }}
             </div>
 
-            <div class="d-flex flex-wrap ga-2 mt-4">
-              <v-chip color="primary" variant="tonal">{{ t("home.savedCount", { count: summary.total }) }}</v-chip>
-              <v-chip color="secondary" variant="tonal">{{ t("home.notesCount", { count: summary.notes }) }}</v-chip>
-              <v-chip variant="flat">{{ t("home.filteredCount", { count: summary.filtered }) }}</v-chip>
+            <div class="hero-metrics d-flex flex-wrap ga-2 mt-4">
+              <div class="hero-stat-pill hero-stat-pill--primary">
+                {{ t("home.savedCount", { count: summary.total }) }}
+              </div>
+              <div class="hero-stat-pill hero-stat-pill--secondary">
+                {{ t("home.notesCount", { count: summary.notes }) }}
+              </div>
+              <div class="hero-stat-pill">
+                {{ t("home.filteredCount", { count: summary.filtered }) }}
+              </div>
             </div>
 
             <div class="d-flex flex-wrap ga-3 mt-6">
-              <v-btn variant="text" prepend-icon="mdi-format-list-bulleted" @click="emit('open-list')">
+              <v-btn
+                variant="flat"
+                prepend-icon="mdi-format-list-bulleted"
+                class="hero-open-button"
+                @click="emit('open-list')"
+              >
                 {{ t("home.viewAll") }}
               </v-btn>
             </div>
@@ -89,7 +101,7 @@ function previewPassword(recordId) {
               {{ t("home.unlockedBody") }}
             </div>
 
-            <div class="d-flex align-center ga-3 mt-5">
+            <div class="hero-side-row d-flex align-center ga-3 mt-5">
               <v-avatar color="secondary" variant="tonal">
                 <v-icon>mdi-shield-check-outline</v-icon>
               </v-avatar>
@@ -109,12 +121,12 @@ function previewPassword(recordId) {
       :notes="summary.notes"
     />
 
-    <v-card class="border-sm">
-      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
+    <v-card class="border-sm home-section-card">
+      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 py-5 px-5">
         <span>{{ t("home.favorites") }}</span>
         <v-chip color="warning" variant="tonal">{{ t("common.countItems", { count: favoriteItems.length }) }}</v-chip>
       </v-card-title>
-      <v-card-text class="pa-4">
+      <v-card-text class="px-5 pb-5 pt-0">
         <div v-if="!favoriteItems.length" class="py-8 text-center">
           <v-icon size="40" color="medium-emphasis">mdi-star-outline</v-icon>
           <div class="text-subtitle-1 mt-3">{{ t("home.noFavorites") }}</div>
@@ -144,15 +156,21 @@ function previewPassword(recordId) {
                 </div>
               </div>
 
-              <v-btn
-                icon
-                variant="text"
-                size="small"
-                :loading="Boolean(favoriteIds[item.id])"
+              <button
+                type="button"
+                class="home-icon-action home-icon-action--warning"
+                :disabled="Boolean(favoriteIds[item.id])"
                 @click="emit('toggle-favorite', item.id)"
               >
-                <v-icon color="warning">mdi-star</v-icon>
-              </v-btn>
+                <v-progress-circular
+                  v-if="Boolean(favoriteIds[item.id])"
+                  indeterminate
+                  size="16"
+                  width="2"
+                  color="warning"
+                />
+                <InlineSvgIcon v-else icon="mdi-star" :size="20" />
+              </button>
             </div>
 
             <div class="d-flex flex-wrap ga-2 mt-4">
@@ -168,13 +186,13 @@ function previewPassword(recordId) {
 
     <v-row dense>
       <v-col cols="12" lg="7">
-        <v-card class="border-sm h-100">
-          <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
+        <v-card class="border-sm h-100 home-section-card">
+          <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 py-5 px-5">
             <span>{{ sectionTitle }}</span>
             <v-btn variant="text" size="small" @click="emit('open-list')">{{ t("home.openList") }}</v-btn>
           </v-card-title>
 
-          <v-card-text class="pa-4">
+          <v-card-text class="px-5 pb-5 pt-0">
             <div v-if="!recentItems.length" class="py-10 text-center">
               <v-icon size="46" color="medium-emphasis">mdi-folder-key-network-outline</v-icon>
               <div class="text-h6 mt-3">{{ t("home.noItems") }}</div>
@@ -200,9 +218,12 @@ function previewPassword(recordId) {
                         <div class="text-subtitle-1 font-weight-medium text-truncate">
                           {{ item.siteName || t("common.unnamedEntry") }}
                         </div>
-                        <v-icon v-if="item.isFavorite" color="warning" size="18">
-                          mdi-star
-                        </v-icon>
+                        <InlineSvgIcon
+                          v-if="item.isFavorite"
+                          icon="mdi-star"
+                          :size="18"
+                          class="text-warning"
+                        />
                       </div>
                       <div class="text-body-2 text-medium-emphasis text-truncate">
                         {{ item.username }}
@@ -211,29 +232,52 @@ function previewPassword(recordId) {
                   </div>
 
                   <div class="d-flex ga-1">
-                    <v-btn
-                      icon
-                      variant="text"
-                      size="small"
-                      :loading="Boolean(favoriteIds[item.id])"
+                    <button
+                      type="button"
+                      class="home-icon-action"
+                      :class="{ 'home-icon-action--warning': item.isFavorite }"
+                      :disabled="Boolean(favoriteIds[item.id])"
                       @click="emit('toggle-favorite', item.id)"
                     >
-                      <v-icon>{{ item.isFavorite ? "mdi-star" : "mdi-star-outline" }}</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="text" size="small" @click="emit('edit', item.id)">
-                      <v-icon>mdi-pencil-outline</v-icon>
-                    </v-btn>
-                    <v-btn
-                      icon
-                      variant="text"
-                      size="small"
-                      :loading="Boolean(revealingIds[item.id])"
+                      <v-progress-circular
+                        v-if="Boolean(favoriteIds[item.id])"
+                        indeterminate
+                        size="16"
+                        width="2"
+                        color="warning"
+                      />
+                      <InlineSvgIcon
+                        v-else
+                        :icon="item.isFavorite ? 'mdi-star' : 'mdi-star-outline'"
+                        :size="20"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      class="home-icon-action"
+                      @click="emit('edit', item.id)"
+                    >
+                      <InlineSvgIcon icon="mdi-pencil-outline" :size="20" />
+                    </button>
+                    <button
+                      type="button"
+                      class="home-icon-action"
+                      :disabled="Boolean(revealingIds[item.id])"
                       @click="emit('toggle-reveal', item.id)"
                     >
-                      <v-icon>
-                        {{ revealedPasswords[item.id] ? "mdi-eye-off-outline" : "mdi-eye-outline" }}
-                      </v-icon>
-                    </v-btn>
+                      <v-progress-circular
+                        v-if="Boolean(revealingIds[item.id])"
+                        indeterminate
+                        size="16"
+                        width="2"
+                        color="primary"
+                      />
+                      <InlineSvgIcon
+                        v-else
+                        :icon="revealedPasswords[item.id] ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                        :size="20"
+                      />
+                    </button>
                   </div>
                 </div>
 
@@ -284,15 +328,7 @@ function previewPassword(recordId) {
 .hero-panel {
   position: relative;
   isolation: isolate;
-  background:
-    radial-gradient(circle at top left, rgba(var(--v-theme-primary), 0.2), transparent 36%),
-    radial-gradient(circle at top right, rgba(var(--v-theme-secondary), 0.14), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(var(--v-theme-warning), 0.14), transparent 34%),
-    linear-gradient(
-      135deg,
-      rgba(var(--v-theme-surface), 1),
-      rgba(var(--v-theme-surface), 0.9)
-    );
+  background: var(--vault-panel-bg);
 }
 
 .hero-panel::before,
@@ -307,10 +343,10 @@ function previewPassword(recordId) {
   width: 42%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.46), transparent 58%);
-  filter: blur(10px);
-  opacity: 0.86;
-  animation: vault-ambient-drift 16s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(var(--v-theme-primary), 0.12), transparent 60%);
+  filter: blur(18px);
+  opacity: 0.58;
+  animation: vault-ambient-drift 22s ease-in-out infinite;
 }
 
 .hero-panel::after {
@@ -318,9 +354,9 @@ function previewPassword(recordId) {
   width: 44%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--v-theme-secondary), 0.2), transparent 58%);
-  filter: blur(18px);
-  opacity: 0.42;
+  background: radial-gradient(circle, rgba(var(--v-theme-secondary), 0.12), transparent 60%);
+  filter: blur(22px);
+  opacity: 0.34;
 }
 
 .hero-copy {
@@ -329,22 +365,51 @@ function previewPassword(recordId) {
   max-width: 720px;
 }
 
+.hero-metrics {
+  gap: 10px;
+}
+
+.hero-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--vault-block-bg);
+  color: rgba(var(--v-theme-on-surface), 0.8);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.hero-stat-pill--primary {
+  color: rgb(var(--v-theme-primary));
+}
+
+.hero-stat-pill--secondary {
+  color: rgb(var(--v-theme-secondary));
+}
+
+.hero-open-button {
+  background: var(--vault-block-bg) !important;
+  box-shadow: none !important;
+}
+
 .hero-side {
   position: relative;
   z-index: 1;
   min-width: min(100%, 320px);
-  background:
-    linear-gradient(
-      180deg,
-      rgba(var(--v-theme-surface), 0.92),
-      rgba(var(--v-theme-surface), 0.76)
-    );
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  animation: vault-float-card 10s ease-in-out infinite;
-  box-shadow:
-    0 16px 30px rgba(22, 32, 46, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  background: var(--vault-block-bg-subtle);
+  box-shadow: none;
+}
+
+.hero-side-row {
+  padding: 14px 16px;
+  border-radius: calc(var(--vault-radius) - 2px);
+  background: var(--vault-block-bg);
+}
+
+.home-section-card {
+  background: var(--vault-panel-bg);
 }
 
 .min-w-0 {
@@ -363,16 +428,8 @@ function previewPassword(recordId) {
 
 .favorite-tile {
   width: min(100%, 280px);
-  background:
-    linear-gradient(
-      180deg,
-      rgba(var(--v-theme-surface), 1),
-      rgba(var(--v-theme-surface), 0.88)
-    ),
-    radial-gradient(circle at top right, rgba(var(--v-theme-warning), 0.14), transparent 42%);
-  box-shadow:
-    0 12px 24px rgba(22, 32, 46, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  background: var(--vault-panel-bg);
+  box-shadow: none;
 }
 
 .favorite-tile::before,
@@ -381,36 +438,69 @@ function previewPassword(recordId) {
   position: absolute;
   inset: auto -12% 42% 24%;
   height: 44%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
   transform: translateX(-44%) skewX(-20deg);
   filter: blur(10px);
   opacity: 0;
-  animation: vault-sheen 13s ease-in-out infinite;
+  animation: vault-sheen 18s ease-in-out infinite;
   pointer-events: none;
 }
 
 .recent-tile {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(var(--v-theme-surface), 0.98),
-      rgba(var(--v-theme-surface), 0.86)
-    ),
-    radial-gradient(circle at top right, rgba(var(--v-theme-secondary), 0.12), transparent 42%);
-  box-shadow:
-    0 12px 24px rgba(22, 32, 46, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.44);
+  background: var(--vault-panel-bg);
+  box-shadow: none;
 }
 
 .favorite-tile:hover,
 .recent-tile:hover {
-  transform: translateY(-4px) scale(1.004);
-  box-shadow: 0 18px 34px rgba(20, 34, 58, 0.1);
+  transform: translateY(-2px) scale(1.003);
+  box-shadow: none;
 }
 
 .password-preview {
   font-family: "Cascadia Code", "Consolas", monospace;
   word-break: break-all;
+}
+
+.home-icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.home-icon-action:hover {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.96);
+}
+
+.home-icon-action:focus-visible {
+  outline: none;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+
+.home-icon-action:disabled {
+  opacity: 0.56;
+  cursor: default;
+}
+
+.home-icon-action--warning {
+  color: rgb(var(--v-theme-warning));
+}
+
+:global(.v-theme--dark) .home-icon-action:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .vault-list-enter-active,

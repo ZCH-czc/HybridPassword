@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap com uap10 rescap">
+
+  <Identity
+    Name="ZCHCH.PasswordVault.PasskeyCompanion"
+    Publisher="CN=PasswordVaultDev"
+    Version="__VERSION__"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Password Vault Passkey Companion</DisplayName>
+    <PublisherDisplayName>Password Vault</PublisherDisplayName>
+    <Description>Companion app for the Windows third-party passkey manager / plugin route.</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily
+      Name="Windows.Desktop"
+      MinVersion="10.0.19041.0"
+      MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="zh-cn" />
+  </Resources>
+
+  <Applications>
+    <Application
+      Id="PasskeyCompanion"
+      Executable="PasswordVault.PasskeyCompanion.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Password Vault Passkey Companion"
+        Description="Companion app for the Windows third-party passkey manager / plugin route."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer
+              Executable="PasswordVault.PasskeyCompanion.exe"
+              Arguments="--plugin-activated"
+              DisplayName="Password Vault Passkey Companion">
+              <com:Class
+                Id="992c709b-7945-4edb-ac3d-b6f8dd17b2ae"
+                DisplayName="Password Vault Passkey Authenticator" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

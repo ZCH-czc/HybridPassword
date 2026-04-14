@@ -56,14 +56,14 @@ function formatTime(preview) {
     persistent
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <v-card class="border-sm">
+    <v-card class="border-sm sync-confirm-card">
       <v-card-title class="pt-6 px-6 text-h5">{{ t("syncConfirm.title") }}</v-card-title>
       <v-card-text class="px-6 pb-2">
-        <div class="text-body-1">
+        <div class="text-body-1 sync-confirm-intro">
           {{ t("syncConfirm.description", { source: sourceLabel }) }}
-        </div>
-        <div class="text-body-2 text-medium-emphasis mt-2">
-          {{ t("syncConfirm.warning") }}
+          <div class="text-body-2 text-medium-emphasis mt-2">
+            {{ t("syncConfirm.warning") }}
+          </div>
         </div>
 
         <v-row dense class="mt-4">
@@ -119,7 +119,18 @@ function formatTime(preview) {
 </template>
 
 <style scoped>
+.sync-confirm-card {
+  background: var(--vault-panel-bg);
+  box-shadow: var(--vault-shadow);
+}
+
+.sync-confirm-intro {
+  padding: 14px 16px;
+  border-radius: calc(var(--vault-radius) - 2px);
+  background: var(--vault-block-bg-subtle);
+}
+
 .sync-preview-card {
-  background: rgba(var(--v-theme-surface), 0.62);
+  background: var(--vault-block-bg);
 }
 </style>

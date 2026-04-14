@@ -61,7 +61,7 @@ function saveDeviceName() {
 </script>
 
 <template>
-  <v-card class="border-sm">
+  <v-card class="border-sm lan-sync-card">
     <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
       <span>{{ t("settings.lanSync") }}</span>
       <v-btn
@@ -76,7 +76,7 @@ function saveDeviceName() {
     </v-card-title>
 
     <v-card-text class="d-flex flex-column ga-4">
-      <v-sheet class="rounded-xl pa-4 settings-block">
+      <v-sheet class="rounded-xl pa-4 settings-block vault-surface-block">
         <div class="text-subtitle-1 font-weight-medium">{{ t("settings.deviceIdentity") }}</div>
         <div class="text-body-2 text-medium-emphasis mt-2">
           {{ t("settings.deviceIdentityBody") }}
@@ -103,7 +103,7 @@ function saveDeviceName() {
         </div>
       </v-sheet>
 
-      <v-sheet class="rounded-xl px-4 py-3 bg-surface-variant text-body-2 text-medium-emphasis">
+      <v-sheet class="rounded-xl px-4 py-3 lan-sync-hint vault-surface-block vault-surface-block--subtle text-body-2 text-medium-emphasis">
         {{ t("settings.lanHint") }}
       </v-sheet>
 
@@ -121,7 +121,7 @@ function saveDeviceName() {
         <v-sheet
           v-for="device in visibleDevices"
           :key="`${device.deviceId}-${device.host}-${device.port}`"
-          class="rounded-xl pa-4 settings-block"
+          class="rounded-xl pa-4 settings-block vault-surface-block"
         >
           <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between ga-4">
             <div class="min-w-0">
@@ -168,8 +168,12 @@ function saveDeviceName() {
 </template>
 
 <style scoped>
+.lan-sync-card {
+  background: var(--vault-panel-bg);
+}
+
 .settings-block {
-  background: rgba(var(--v-theme-surface), 0.62);
+  background: var(--vault-block-bg);
 }
 
 .min-w-0 {
@@ -187,4 +191,5 @@ function saveDeviceName() {
   opacity: 0;
   transform: translateY(10px);
 }
+
 </style>

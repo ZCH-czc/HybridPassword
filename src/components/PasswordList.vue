@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useAppPreferences } from "@/composables/useAppPreferences";
 import PasswordListItem from "@/components/PasswordListItem.vue";
 
@@ -7,6 +7,10 @@ const props = defineProps({
   items: {
     type: Array,
     default: () => [],
+  },
+  sectionTitle: {
+    type: String,
+    default: "",
   },
   revealedPasswords: {
     type: Object,
@@ -54,10 +58,16 @@ const emit = defineEmits([
 ]);
 
 const { t } = useAppPreferences();
+const PAGE_SIZE = 40;
+const loadMoreRef = ref(null);
+const visibleCount = ref(PAGE_SIZE);
+let loadMoreObserver = null;
+
 const selectedCount = computed(() => props.selectedIds.length);
 const allSelected = computed(
   () => props.items.length > 0 && selectedCount.value === props.items.length
 );
+const visibleItems = computed(() => props.items.slice(0, visibleCount.value));
 const selectedItems = computed(() => {
   const selectedIdSet = new Set(props.selectedIds);
   return props.items.filter((item) => selectedIdSet.has(item.id));
@@ -71,13 +81,78 @@ const bulkFavoriteLabel = computed(() => {
     ? t("list.bulkUnfavorite")
     : t("list.bulkFavorite");
 });
+
+function loadMoreItems() {
+  if (visibleCount.value >= props.items.length) {
+    return;
+  }
+
+  visibleCount.value = Math.min(props.items.length, visibleCount.value + PAGE_SIZE);
+}
+
+function resetVisibleItems() {
+  visibleCount.value = Math.min(PAGE_SIZE, props.items.length);
+}
+
+function disconnectObserver() {
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect();
+    loadMoreObserver = null;
+  }
+}
+
+async function setupObserver() {
+  disconnectObserver();
+
+  if (typeof IntersectionObserver !== "function") {
+    return;
+  }
+
+  await nextTick();
+
+  if (!loadMoreRef.value || visibleCount.value >= props.items.length) {
+    return;
+  }
+
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        loadMoreItems();
+      }
+    },
+    {
+      root: null,
+      rootMargin: "320px 0px 320px 0px",
+      threshold: 0.01,
+    }
+  );
+
+  loadMoreObserver.observe(loadMoreRef.value);
+}
+
+watch(
+  () => props.items,
+  () => {
+    resetVisibleItems();
+    void setupObserver();
+  },
+  { immediate: true }
+);
+
+watch(visibleCount, () => {
+  void setupObserver();
+});
+
+onBeforeUnmount(() => {
+  disconnectObserver();
+});
 </script>
 
 <template>
-  <v-card class="border-sm">
+  <v-card class="border-sm password-list-card">
     <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
       <div class="d-flex align-center ga-3">
-        <span>{{ t("list.savedPasswords") }}</span>
+        <span>{{ sectionTitle || t("list.savedPasswords") }}</span>
         <v-chip variant="tonal" color="secondary">{{ t("common.countItems", { count: items.length }) }}</v-chip>
         <v-chip v-if="selectionMode" variant="tonal" color="secondary">
           {{ t("list.selectedCount", { count: selectedCount }) }}
@@ -133,7 +208,7 @@ const bulkFavoriteLabel = computed(() => {
 
       <TransitionGroup v-else name="vault-list" tag="div">
         <PasswordListItem
-          v-for="item in items"
+          v-for="item in visibleItems"
           :key="item.id"
           :item="item"
           :revealed-password="revealedPasswords[item.id] || ''"
@@ -151,11 +226,23 @@ const bulkFavoriteLabel = computed(() => {
           @toggle-select="emit('toggle-select', $event)"
         />
       </TransitionGroup>
+
+      <div
+        v-if="visibleItems.length < items.length"
+        ref="loadMoreRef"
+        class="d-flex justify-center py-4"
+      >
+        <v-progress-circular indeterminate size="24" width="2" color="primary" />
+      </div>
     </v-card-text>
   </v-card>
 </template>
 
 <style scoped>
+.password-list-card {
+  background: var(--vault-panel-bg);
+}
+
 .vault-list-enter-active,
 .vault-list-leave-active,
 .vault-list-move {

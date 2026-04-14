@@ -40,7 +40,7 @@ const targetLabel = computed(() => {
     transition="dialog-bottom-transition"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <v-card class="border-sm">
+    <v-card class="border-sm delete-confirm-card">
       <v-card-text class="pa-6">
         <div class="text-h6 font-weight-medium">{{ t("deleteDialog.title") }}</div>
         <div class="text-body-2 text-medium-emphasis mt-3">
@@ -58,3 +58,10 @@ const targetLabel = computed(() => {
     </v-card>
   </v-dialog>
 </template>
+
+<style scoped>
+.delete-confirm-card {
+  background: var(--vault-panel-bg);
+  box-shadow: var(--vault-shadow);
+}
+</style>

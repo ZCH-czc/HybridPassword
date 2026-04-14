@@ -28,6 +28,20 @@ public sealed class HostWebEventService : IHostWebEventService
         await DispatchOrQueueAsync(script);
     }
 
+    public async Task RequestIncrementalSyncApplyAsync(string recordsJson, string sourceLabel)
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            sourceLabel,
+            records = JsonSerializer.Deserialize<object>(recordsJson),
+        });
+
+        var script =
+            $"window.dispatchEvent(new CustomEvent('password-vault-host-sync-apply', {{ detail: {payload} }}));";
+
+        await DispatchOrQueueAsync(script);
+    }
+
     public async Task FlushPendingAsync()
     {
         if (string.IsNullOrWhiteSpace(_pendingScript))

@@ -17,8 +17,9 @@ import {
   revealSecretKey,
   rewrapVaultConfig,
   unlockVaultKey,
+  verifyVaultKeyCompatibility,
 } from "@/utils/crypto";
-import { collapseImportedEntries, parseImportedEntries } from "@/utils/csv-utils";
+import { collapseImportedEntries, createImportEntryMergeKey } from "@/utils/csv-utils";
 import {
   buildEncryptedVaultSnapshot,
   buildSnapshotPreview,
@@ -30,8 +31,11 @@ import {
   listPasswordRecords,
   putPasswordRecord,
   putPasswordRecords,
+  resetVaultDatabase,
+  replacePasswordRecords,
   replaceVaultSnapshotData,
   saveVaultConfigRecord,
+  streamPasswordRecords,
 } from "@/utils/indexed-db";
 
 function sortActiveRecords(records) {
@@ -60,9 +64,47 @@ function splitRecords(records) {
   };
 }
 
+function normalizeSiteName(siteName) {
+  return String(siteName || "").trim().toLowerCase();
+}
+
+function createSemanticRecordKey(record) {
+  return `${normalizeSiteName(record?.siteName)}::${record?.usernameNormalized || normalizeUsername(record?.username)}`;
+}
+
+function createHiddenSyncGroup(record, side = "local") {
+  return {
+    id: `${side}-${record.id}`,
+    type: "same",
+    resolution: side,
+    recommendedResolution: side,
+    local: side === "local" ? { record } : null,
+    remote: side === "remote" ? { record } : null,
+  };
+}
+
+function sortPreviewItems(items = []) {
+  return [...items].sort((left, right) => {
+    const leftTime =
+      left?.detail?.updatedAt ||
+      left?.detail?.deletedAt ||
+      left?.detail?.createdAt ||
+      left?.record?.updatedAt ||
+      0;
+    const rightTime =
+      right?.detail?.updatedAt ||
+      right?.detail?.deletedAt ||
+      right?.detail?.createdAt ||
+      right?.record?.updatedAt ||
+      0;
+
+    return rightTime - leftTime;
+  });
+}
+
 export function usePasswordVault() {
-  const records = ref([]);
-  const deletedRecords = ref([]);
+  const records = shallowRef([]);
+  const deletedRecords = shallowRef([]);
   const revealedPasswords = reactive({});
   const vaultConfig = ref(null);
   const vaultKey = shallowRef(null);
@@ -73,6 +115,7 @@ export function usePasswordVault() {
     unlocked: false,
     requiresSetup: false,
     requiresSecretKeyForUnlock: false,
+    recordsLoading: false,
   });
 
   function assertUnlocked() {
@@ -112,6 +155,346 @@ export function usePasswordVault() {
     return [...records.value, ...deletedRecords.value].find((item) => item.id === recordId) || null;
   }
 
+  function applyStoredRecordLocally(storedRecord) {
+    const nextRecordId = storedRecord.id;
+    const nextActiveRecords = records.value.filter((record) => record.id !== nextRecordId);
+    const nextDeletedRecords = deletedRecords.value.filter((record) => record.id !== nextRecordId);
+
+    if (storedRecord.deletedAt) {
+      nextDeletedRecords.push(storedRecord);
+      deletedRecords.value = sortDeletedRecords(nextDeletedRecords);
+      records.value = nextActiveRecords;
+      return;
+    }
+
+    nextActiveRecords.push(storedRecord);
+    records.value = sortActiveRecords(nextActiveRecords);
+    deletedRecords.value = nextDeletedRecords;
+  }
+
+  function applyStoredRecordsLocally(storedRecords) {
+    const recordIds = new Set(storedRecords.map((record) => record.id));
+    const nextActiveRecords = records.value.filter((record) => !recordIds.has(record.id));
+    const nextDeletedRecords = deletedRecords.value.filter((record) => !recordIds.has(record.id));
+
+    storedRecords.forEach((record) => {
+      if (record.deletedAt) {
+        nextDeletedRecords.push(record);
+      } else {
+        nextActiveRecords.push(record);
+      }
+    });
+
+    records.value = sortActiveRecords(nextActiveRecords);
+    deletedRecords.value = sortDeletedRecords(nextDeletedRecords);
+  }
+
+  function removeStoredRecordLocally(recordId) {
+    records.value = records.value.filter((record) => record.id !== recordId);
+    deletedRecords.value = deletedRecords.value.filter((record) => record.id !== recordId);
+  }
+
+  async function buildRecordDetail(record) {
+    const detail = {
+      id: record.id,
+      siteName: record.siteName || "",
+      username: record.username || "",
+      notes: Array.isArray(record.notes) ? [...record.notes] : [],
+      isFavorite: Boolean(record.isFavorite),
+      deletedAt: record.deletedAt || null,
+      createdAt: Number(record.createdAt || record.updatedAt || Date.now()),
+      updatedAt: Number(record.updatedAt || record.createdAt || Date.now()),
+      status: record.deletedAt ? "deleted" : "active",
+    };
+
+    if (!record.deletedAt) {
+      detail.password = await decryptText(record.passwordCipher, vaultKey.value);
+    } else {
+      detail.password = "";
+    }
+
+    return detail;
+  }
+
+  function areDetailsEquivalent(localDetail, remoteDetail) {
+    if (!localDetail || !remoteDetail) {
+      return false;
+    }
+
+    return (
+      localDetail.status === remoteDetail.status &&
+      normalizeSiteName(localDetail.siteName) === normalizeSiteName(remoteDetail.siteName) &&
+      normalizeUsername(localDetail.username) === normalizeUsername(remoteDetail.username) &&
+      JSON.stringify(localDetail.notes || []) === JSON.stringify(remoteDetail.notes || []) &&
+      String(localDetail.password || "") === String(remoteDetail.password || "") &&
+      Boolean(localDetail.isFavorite) === Boolean(remoteDetail.isFavorite)
+    );
+  }
+
+  function pickRecommendedResolution(localRecord, remoteRecord) {
+    const localScore = Math.max(
+      Number(localRecord?.updatedAt || 0),
+      Number(localRecord?.deletedAt || 0),
+      Number(localRecord?.createdAt || 0)
+    );
+    const remoteScore = Math.max(
+      Number(remoteRecord?.updatedAt || 0),
+      Number(remoteRecord?.deletedAt || 0),
+      Number(remoteRecord?.createdAt || 0)
+    );
+
+    return remoteScore > localScore ? "remote" : "local";
+  }
+
+  async function buildIncrementalSyncPlan(snapshotInput) {
+    assertUnlocked();
+
+    const snapshot =
+      typeof snapshotInput === "string"
+        ? parseEncryptedVaultSnapshot(snapshotInput)
+        : snapshotInput;
+
+    const compatible = await verifyVaultKeyCompatibility(vaultKey.value, snapshot.vaultConfig);
+    if (!compatible) {
+      throw new Error("The selected device belongs to a different vault and cannot be merged incrementally.");
+    }
+
+    const localAllRecords = [...records.value, ...deletedRecords.value];
+    const remoteAllRecords = [...snapshot.records];
+    const matchedLocalIds = new Set();
+    const matchedRemoteIds = new Set();
+    const groups = [];
+
+    const remoteById = new Map(remoteAllRecords.map((record) => [record.id, record]));
+
+    for (const localRecord of localAllRecords) {
+      const remoteRecord = remoteById.get(localRecord.id);
+      if (!remoteRecord) {
+        continue;
+      }
+
+      matchedLocalIds.add(localRecord.id);
+      matchedRemoteIds.add(remoteRecord.id);
+
+      const localDetail = await buildRecordDetail(localRecord);
+      const remoteDetail = await buildRecordDetail(remoteRecord);
+
+      if (areDetailsEquivalent(localDetail, remoteDetail)) {
+        groups.push({
+          id: `pair-${localRecord.id}`,
+          type: "same",
+          resolution: "local",
+          recommendedResolution: "local",
+          local: { record: localRecord, detail: localDetail },
+          remote: { record: remoteRecord, detail: remoteDetail },
+        });
+        continue;
+      }
+
+      groups.push({
+        id: `conflict-${localRecord.id}`,
+        type: "conflict",
+        resolution: pickRecommendedResolution(localRecord, remoteRecord),
+        recommendedResolution: pickRecommendedResolution(localRecord, remoteRecord),
+        local: { record: localRecord, detail: localDetail },
+        remote: { record: remoteRecord, detail: remoteDetail },
+      });
+    }
+
+    const remainingLocal = localAllRecords.filter((record) => !matchedLocalIds.has(record.id));
+    const remainingRemote = remoteAllRecords.filter((record) => !matchedRemoteIds.has(record.id));
+
+    const localBySemanticKey = new Map();
+    const remoteBySemanticKey = new Map();
+
+    remainingLocal.forEach((record) => {
+      const key = createSemanticRecordKey(record);
+      const bucket = localBySemanticKey.get(key) || [];
+      bucket.push(record);
+      localBySemanticKey.set(key, bucket);
+    });
+
+    remainingRemote.forEach((record) => {
+      const key = createSemanticRecordKey(record);
+      const bucket = remoteBySemanticKey.get(key) || [];
+      bucket.push(record);
+      remoteBySemanticKey.set(key, bucket);
+    });
+
+    for (const [semanticKey, localBucket] of localBySemanticKey.entries()) {
+      const remoteBucket = remoteBySemanticKey.get(semanticKey);
+      if (!remoteBucket || localBucket.length !== 1 || remoteBucket.length !== 1) {
+        continue;
+      }
+
+      const [localRecord] = localBucket;
+      const [remoteRecord] = remoteBucket;
+
+      matchedLocalIds.add(localRecord.id);
+      matchedRemoteIds.add(remoteRecord.id);
+
+      const localDetail = await buildRecordDetail(localRecord);
+      const remoteDetail = await buildRecordDetail(remoteRecord);
+
+      if (areDetailsEquivalent(localDetail, remoteDetail)) {
+        groups.push({
+          id: `semantic-${semanticKey}`,
+          type: "same",
+          resolution: pickRecommendedResolution(localRecord, remoteRecord),
+          recommendedResolution: pickRecommendedResolution(localRecord, remoteRecord),
+          local: { record: localRecord, detail: localDetail },
+          remote: { record: remoteRecord, detail: remoteDetail },
+        });
+        continue;
+      }
+
+      groups.push({
+        id: `semantic-conflict-${semanticKey}`,
+        type: "conflict",
+        resolution: pickRecommendedResolution(localRecord, remoteRecord),
+        recommendedResolution: pickRecommendedResolution(localRecord, remoteRecord),
+        local: { record: localRecord, detail: localDetail },
+        remote: { record: remoteRecord, detail: remoteDetail },
+      });
+    }
+
+    const finalRemainingLocal = remainingLocal.filter((record) => !matchedLocalIds.has(record.id));
+    const finalRemainingRemote = remainingRemote.filter((record) => !matchedRemoteIds.has(record.id));
+
+    for (const localRecord of finalRemainingLocal) {
+      if (localRecord.deletedAt) {
+        groups.push(createHiddenSyncGroup(localRecord, "local"));
+        continue;
+      }
+
+      groups.push({
+        id: `local-only-${localRecord.id}`,
+        type: "localOnly",
+        selected: true,
+        local: {
+          record: localRecord,
+          detail: await buildRecordDetail(localRecord),
+        },
+        remote: null,
+      });
+    }
+
+    for (const remoteRecord of finalRemainingRemote) {
+      if (remoteRecord.deletedAt) {
+        groups.push(createHiddenSyncGroup(remoteRecord, "remote"));
+        continue;
+      }
+
+      groups.push({
+        id: `remote-only-${remoteRecord.id}`,
+        type: "remoteOnly",
+        selected: true,
+        local: null,
+        remote: {
+          record: remoteRecord,
+          detail: await buildRecordDetail(remoteRecord),
+        },
+      });
+    }
+
+    const localOnly = sortPreviewItems(groups.filter((group) => group.type === "localOnly"));
+    const remoteOnly = sortPreviewItems(groups.filter((group) => group.type === "remoteOnly"));
+    const conflicts = sortPreviewItems(groups.filter((group) => group.type === "conflict"));
+
+    return {
+      snapshot,
+      localPreview: getSyncPreview(),
+      remotePreview: snapshot.preview || buildSnapshotPreview(snapshot.activeRecords, snapshot.deletedRecords),
+      groups,
+      localOnly,
+      remoteOnly,
+      conflicts,
+      summary: {
+        localOnlyCount: localOnly.length,
+        remoteOnlyCount: remoteOnly.length,
+        conflictCount: conflicts.length,
+      },
+    };
+  }
+
+  async function applyIncrementalSyncPlan(plan) {
+    assertUnlocked();
+
+    if (!plan?.groups?.length) {
+      throw new Error("There are no sync changes to apply.");
+    }
+
+    const nextRecords = [];
+
+    for (const group of plan.groups) {
+      if (group.type === "same") {
+        const chosenRecord =
+          group.resolution === "remote"
+            ? group.remote?.record || group.local?.record
+            : group.local?.record || group.remote?.record;
+
+        if (chosenRecord) {
+          nextRecords.push(chosenRecord);
+        }
+        continue;
+      }
+
+      if (group.type === "localOnly") {
+        if (group.selected && group.local?.record) {
+          nextRecords.push(group.local.record);
+        }
+        continue;
+      }
+
+      if (group.type === "remoteOnly") {
+        if (group.selected && group.remote?.record) {
+          nextRecords.push(group.remote.record);
+        }
+        continue;
+      }
+
+      if (group.type === "conflict") {
+        const chosenRecord =
+          group.resolution === "remote"
+            ? group.remote?.record || null
+            : group.local?.record || null;
+
+        if (chosenRecord) {
+          nextRecords.push(chosenRecord);
+        }
+      }
+    }
+
+    await replacePasswordRecords(nextRecords);
+    clearRevealedPasswords();
+    await loadRecords();
+
+    return {
+      total: nextRecords.length,
+      records: nextRecords,
+    };
+  }
+
+  async function applyExternalEncryptedRecords(nextRecords) {
+    if (!Array.isArray(nextRecords)) {
+      throw new Error("The host did not provide valid encrypted sync records.");
+    }
+
+    await replacePasswordRecords(nextRecords);
+    clearRevealedPasswords();
+
+    if (state.unlocked) {
+      await loadRecords();
+    } else {
+      records.value = [];
+      deletedRecords.value = [];
+    }
+
+    return {
+      total: nextRecords.length,
+    };
+  }
+
   async function bootstrapVault() {
     state.bootstrapping = true;
 
@@ -125,17 +508,44 @@ export function usePasswordVault() {
     }
   }
 
-  async function loadRecords() {
-    const allRecords = await listPasswordRecords();
-    const { activeRecords, removedRecords } = splitRecords(allRecords);
+  async function loadRecords({ progressive = false, batchSize = 120 } = {}) {
+    state.recordsLoading = true;
 
-    records.value = activeRecords;
-    deletedRecords.value = removedRecords;
+    try {
+      const activeRecords = [];
+      const removedRecords = [];
 
-    return {
-      activeRecords,
-      removedRecords,
-    };
+      if (progressive) {
+        records.value = [];
+        deletedRecords.value = [];
+      }
+
+      await streamPasswordRecords({
+        batchSize,
+        onActiveBatch: (batch) => {
+          activeRecords.push(...batch);
+          if (progressive) {
+            records.value = [...activeRecords];
+          }
+        },
+        onDeletedBatch: (batch) => {
+          removedRecords.push(...batch);
+          if (progressive) {
+            deletedRecords.value = [...removedRecords];
+          }
+        },
+      });
+
+      records.value = activeRecords;
+      deletedRecords.value = removedRecords;
+
+      return {
+        activeRecords,
+        removedRecords,
+      };
+    } finally {
+      state.recordsLoading = false;
+    }
   }
 
   async function migrateLegacyVault(passphrase, legacyCryptoKey) {
@@ -302,7 +712,7 @@ export function usePasswordVault() {
     });
 
     await putPasswordRecord(storedRecord);
-    await loadRecords();
+    applyStoredRecordLocally(storedRecord);
     delete revealedPasswords[storedRecord.id];
     return storedRecord;
   }
@@ -313,13 +723,14 @@ export function usePasswordVault() {
       throw new Error("未找到要删除的密码记录。");
     }
 
-    await putPasswordRecord({
+    const storedRecord = {
       ...existing,
       deletedAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    };
 
-    await loadRecords();
+    await putPasswordRecord(storedRecord);
+    applyStoredRecordLocally(storedRecord);
     delete revealedPasswords[recordId];
   }
 
@@ -332,15 +743,14 @@ export function usePasswordVault() {
     }
 
     const timestamp = Date.now();
-    await putPasswordRecords(
-      targets.map((record) => ({
+    const storedRecords = targets.map((record) => ({
         ...record,
         deletedAt: timestamp,
         updatedAt: timestamp,
-      }))
-    );
+      }));
 
-    await loadRecords();
+    await putPasswordRecords(storedRecords);
+    applyStoredRecordsLocally(storedRecords);
     clearRevealedPasswordsByIds(targets.map((record) => record.id));
   }
 
@@ -350,18 +760,19 @@ export function usePasswordVault() {
       throw new Error("未找到要恢复的记录。");
     }
 
-    await putPasswordRecord({
+    const storedRecord = {
       ...existing,
       deletedAt: null,
       updatedAt: Date.now(),
-    });
+    };
 
-    await loadRecords();
+    await putPasswordRecord(storedRecord);
+    applyStoredRecordLocally(storedRecord);
   }
 
   async function permanentlyDeleteRecord(recordId) {
     await deletePasswordRecord(recordId);
-    await loadRecords();
+    removeStoredRecordLocally(recordId);
     delete revealedPasswords[recordId];
   }
 
@@ -371,13 +782,14 @@ export function usePasswordVault() {
       throw new Error("未找到要收藏的密码记录。");
     }
 
-    await putPasswordRecord({
+    const storedRecord = {
       ...existing,
       isFavorite: !existing.isFavorite,
       updatedAt: Date.now(),
-    });
+    };
 
-    await loadRecords();
+    await putPasswordRecord(storedRecord);
+    applyStoredRecordLocally(storedRecord);
   }
 
   async function setFavoriteRecords(recordIds, isFavorite) {
@@ -389,15 +801,14 @@ export function usePasswordVault() {
     }
 
     const timestamp = Date.now();
-    await putPasswordRecords(
-      targets.map((record) => ({
+    const storedRecords = targets.map((record) => ({
         ...record,
         isFavorite,
         updatedAt: timestamp,
-      }))
-    );
+      }));
 
-    await loadRecords();
+    await putPasswordRecords(storedRecords);
+    applyStoredRecordsLocally(storedRecords);
   }
 
   async function changeMasterPassword(currentPassphrase, nextPassphrase) {
@@ -416,6 +827,27 @@ export function usePasswordVault() {
     await saveVaultConfigRecord(nextVault.config);
     applyVaultSession(nextVault.config, vaultKey.value, vaultKeyBase64.value);
     clearRevealedPasswords();
+  }
+
+  async function verifyCurrentPassphrase(currentPassphrase) {
+    assertUnlocked();
+    await unlockVaultKey(currentPassphrase, vaultConfig.value);
+    return true;
+  }
+
+  async function clearAllData(currentPassphrase) {
+    assertUnlocked();
+
+    await unlockVaultKey(currentPassphrase, vaultConfig.value);
+    await resetVaultDatabase();
+
+    vaultConfig.value = null;
+    clearVaultSession();
+    records.value = [];
+    deletedRecords.value = [];
+    clearRevealedPasswords();
+    state.requiresSetup = true;
+    state.requiresSecretKeyForUnlock = false;
   }
 
   async function getExportEntries() {
@@ -463,26 +895,29 @@ export function usePasswordVault() {
     return snapshot;
   }
 
-  async function importEntriesFromCsvText(text, strategy) {
+  async function importEntriesFromExternalSource(parsedImport, strategy) {
     assertUnlocked();
 
-    const parsedEntries = parseImportedEntries(text);
+    const parsedEntries = Array.isArray(parsedImport?.entries) ? parsedImport.entries : [];
     if (!parsedEntries.length) {
-      throw new Error("CSV 中没有可导入的有效数据。");
+      throw new Error("No compatible entries were found in the selected import file.");
     }
 
-    const collapsed = collapseImportedEntries(parsedEntries, strategy);
-    const existingMap = new Map(
-      [...records.value, ...deletedRecords.value].map((record) => [record.usernameNormalized, record])
-    );
+    const collapsed = collapseImportedEntries(parsedEntries, strategy, createImportEntryMergeKey);
+    const existingMap = new Map();
+
+    [...records.value, ...deletedRecords.value].forEach((record) => {
+      existingMap.set(createImportEntryMergeKey(record), record);
+    });
 
     let created = 0;
     let updated = 0;
     let skipped = collapsed.skippedDuplicates;
+    const ignored = Number(parsedImport?.ignored || 0);
     const recordsToPersist = [];
 
     for (const entry of collapsed.entries) {
-      const existing = existingMap.get(normalizeUsername(entry.username));
+      const existing = existingMap.get(createImportEntryMergeKey(entry));
 
       if (existing && strategy === "skip") {
         skipped += 1;
@@ -496,10 +931,10 @@ export function usePasswordVault() {
         username: entry.username,
         notes: entry.notes,
         passwordCipher,
-        isFavorite: existing?.isFavorite || false,
+        isFavorite: Boolean(entry.isFavorite ?? existing?.isFavorite),
         deletedAt: null,
         createdAt: existing?.createdAt || entry.createdAt,
-        updatedAt: Date.now(),
+        updatedAt: entry.updatedAt || existing?.updatedAt || Date.now(),
       });
 
       recordsToPersist.push(mergedRecord);
@@ -522,6 +957,9 @@ export function usePasswordVault() {
       created,
       updated,
       skipped,
+      ignored,
+      sourceLabel: parsedImport?.sourceLabel || "Import",
+      ignoredItems: Array.isArray(parsedImport?.ignoredItems) ? parsedImport.ignoredItems : [],
     };
   }
 
@@ -542,9 +980,12 @@ export function usePasswordVault() {
     state,
     vaultConfig,
     bootstrapVault,
+    buildIncrementalSyncPlan,
     buildEditableDraft,
     changeMasterPassword,
+    clearAllData,
     clonePasswordDraft,
+    verifyCurrentPassphrase,
     decryptPasswordById,
     getEncryptedSnapshot,
     getExportEntries,
@@ -552,9 +993,11 @@ export function usePasswordVault() {
     getSyncPreview,
     getVaultKeyBase64,
     hidePassword,
-    importEntriesFromCsvText,
+    importEntriesFromExternalSource,
     loadRecords,
     lockVault,
+    applyIncrementalSyncPlan,
+    applyExternalEncryptedRecords,
     unlockWithVaultKeyBase64,
     permanentlyDeleteRecord,
     removeRecord,

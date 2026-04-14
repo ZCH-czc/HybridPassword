@@ -110,7 +110,7 @@ watch(
     max-width="760"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <v-card class="border-sm">
+    <v-card class="border-sm editor-card">
       <v-card-title class="px-6 pt-6">
         {{ localDraft.id ? t("editor.editTitle") : t("editor.createTitle") }}
       </v-card-title>
@@ -165,7 +165,7 @@ watch(
                   hide-details
                 />
 
-                <v-btn icon variant="tonal" color="error" @click="removeNote(index)">
+                <v-btn icon variant="text" color="error" @click="removeNote(index)">
                   <v-icon>mdi-close</v-icon>
                 </v-btn>
               </div>
@@ -182,3 +182,15 @@ watch(
     </v-card>
   </v-dialog>
 </template>
+
+<style scoped>
+.editor-card {
+  background: var(--vault-panel-bg);
+  box-shadow: var(--vault-shadow);
+}
+
+:deep(.editor-card .v-field) {
+  background: var(--vault-block-bg) !important;
+  box-shadow: none !important;
+}
+</style>

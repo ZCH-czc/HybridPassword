@@ -6,11 +6,13 @@ namespace blazorApp;
 public partial class App : Application
 {
     private readonly IServiceProvider _serviceProvider;
+    private int _passkeyCompanionCleanupTriggered;
 
     public App(IServiceProvider serviceProvider)
     {
         InitializeComponent();
         _serviceProvider = serviceProvider;
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
 
 #if WINDOWS
         var userDataFolder = Path.Combine(FileSystem.AppDataDirectory, "WebView2");
@@ -26,6 +28,45 @@ public partial class App : Application
         };
 
         _serviceProvider.GetRequiredService<IHostPlatformService>().AttachWindow(window);
+        window.Destroying += OnWindowDestroying;
+        _ = _serviceProvider.GetRequiredService<IPasskeyHostService>().EnsureCompanionOnHostStartAsync();
         return window;
+    }
+
+    protected override void CleanUp()
+    {
+        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        TryCleanupPasskeyCompanion();
+        base.CleanUp();
+    }
+
+    private void OnWindowDestroying(object? sender, EventArgs e)
+    {
+        TryCleanupPasskeyCompanion();
+    }
+
+    private void OnProcessExit(object? sender, EventArgs e)
+    {
+        TryCleanupPasskeyCompanion();
+    }
+
+    private void TryCleanupPasskeyCompanion()
+    {
+        if (Interlocked.Exchange(ref _passkeyCompanionCleanupTriggered, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _serviceProvider
+                .GetRequiredService<IPasskeyHostService>()
+                .CleanupCompanionOnHostExitAsync()
+                .GetAwaiter()
+                .GetResult();
+        }
+        catch
+        {
+        }
     }
 }

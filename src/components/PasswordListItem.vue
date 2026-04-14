@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from "vue";
+import InlineSvgIcon from "@/components/InlineSvgIcon.vue";
 import { useAppPreferences } from "@/composables/useAppPreferences";
 import { maskPassword } from "@/utils/password-generator";
 
@@ -101,22 +102,48 @@ const notesLabel = computed(() =>
         </div>
 
         <div v-if="!selectionMode" class="d-flex ga-1">
-          <v-btn
-            icon
-            variant="text"
-            :loading="favoriteLoading"
+          <button
+            type="button"
+            class="vault-icon-action"
+            :class="{ 'vault-icon-action--warning': item.isFavorite }"
+            :disabled="favoriteLoading"
             @click="emit('toggle-favorite', item.id)"
           >
-            <v-icon :color="item.isFavorite ? 'warning' : undefined">
-              {{ item.isFavorite ? "mdi-star" : "mdi-star-outline" }}
-            </v-icon>
-          </v-btn>
-          <v-btn icon variant="text" :loading="editLoading" @click="emit('edit', item.id)">
-            <v-icon>mdi-pencil-outline</v-icon>
-          </v-btn>
-          <v-btn icon variant="text" color="error" @click="emit('delete', item.id)">
-            <v-icon>mdi-delete-outline</v-icon>
-          </v-btn>
+            <v-progress-circular
+              v-if="favoriteLoading"
+              indeterminate
+              size="16"
+              width="2"
+              color="warning"
+            />
+            <InlineSvgIcon
+              v-else
+              :icon="item.isFavorite ? 'mdi-star' : 'mdi-star-outline'"
+              :size="20"
+            />
+          </button>
+          <button
+            type="button"
+            class="vault-icon-action"
+            :disabled="editLoading"
+            @click="emit('edit', item.id)"
+          >
+            <v-progress-circular
+              v-if="editLoading"
+              indeterminate
+              size="16"
+              width="2"
+              color="primary"
+            />
+            <InlineSvgIcon v-else icon="mdi-pencil-outline" :size="20" />
+          </button>
+          <button
+            type="button"
+            class="vault-icon-action vault-icon-action--danger"
+            @click="emit('delete', item.id)"
+          >
+            <InlineSvgIcon icon="mdi-delete-outline" :size="20" />
+          </button>
         </div>
       </div>
 
@@ -219,24 +246,62 @@ const notesLabel = computed(() =>
 }
 
 .vault-inner-sheet {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(var(--v-theme-surface), 0.92),
-      rgba(var(--v-theme-surface), 0.78)
-    ),
-    radial-gradient(circle at top right, rgba(var(--v-theme-secondary), 0.1), transparent 42%);
-  box-shadow:
-    0 8px 18px rgba(22, 32, 46, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  background: var(--vault-block-bg);
+  box-shadow: none;
 }
 
 .vault-list-card:hover {
   transform: translateY(-4px) scale(1.003);
-  box-shadow: 0 18px 34px rgba(26, 40, 70, 0.1);
+  box-shadow: none;
 }
 
 .vault-list-card--selected {
   box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.22), var(--vault-shadow-soft);
+}
+
+.vault-icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.vault-icon-action:hover {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.96);
+}
+
+.vault-icon-action:focus-visible {
+  outline: none;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+
+.vault-icon-action:disabled {
+  opacity: 0.56;
+  cursor: default;
+}
+
+.vault-icon-action--danger {
+  color: rgb(var(--v-theme-error));
+}
+
+.vault-icon-action--warning {
+  color: rgb(var(--v-theme-warning));
+}
+
+:global(.v-theme--dark) .vault-icon-action:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 </style>

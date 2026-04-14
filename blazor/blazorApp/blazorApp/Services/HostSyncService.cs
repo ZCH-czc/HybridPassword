@@ -33,6 +33,7 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
     private readonly object _snapshotLock = new();
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly SemaphoreSlim _certificateLock = new(1, 1);
+    private readonly IHostWebEventService _hostWebEventService;
 
     private TcpListener? _snapshotListener;
     private Task? _snapshotServerTask;
@@ -45,9 +46,48 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
     private X509Certificate2? _snapshotCertificate;
     private string _snapshotCertificateFingerprint = string.Empty;
 
-    public HostSyncService()
+    public HostSyncService(IHostWebEventService hostWebEventService)
     {
-        EnsureBackgroundServicesStarted();
+        _hostWebEventService = hostWebEventService;
+    }
+
+    public Task<HostOperationResult> ResetSyncStateAsync()
+    {
+        Preferences.Default.Remove(WebDavBaseUrlKey);
+        Preferences.Default.Remove(WebDavRemotePathKey);
+        Preferences.Default.Remove(WebDavUsernameKey);
+        Preferences.Default.Remove(WebDavHasPasswordKey);
+        Preferences.Default.Remove(DeviceIdKey);
+        Preferences.Default.Remove(DeviceNameKey);
+
+        SecureStorage.Default.Remove(WebDavPasswordKey);
+        SecureStorage.Default.Remove(LanTlsCertificateKey);
+        SecureStorage.Default.Remove(LanTlsCertificatePasswordKey);
+
+        lock (_snapshotLock)
+        {
+            _publishedSnapshot = string.Empty;
+            _publishedPreview = new SyncPreview();
+            _publishedAt = 0;
+        }
+
+        _snapshotCertificateFingerprint = string.Empty;
+
+        try
+        {
+            _snapshotCertificate?.Dispose();
+        }
+        catch
+        {
+        }
+
+        _snapshotCertificate = null;
+
+        return Task.FromResult(new HostOperationResult
+        {
+            Success = true,
+            Message = "Host sync state cleared.",
+        });
     }
 
     public Task<SyncSettingsState> GetSyncSettingsAsync()
@@ -329,6 +369,67 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
         }
     }
 
+    public async Task<HostOperationResult> UploadLanMergedRecordsAsync(UploadLanMergedRecordsRequest request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Host) || request.Port <= 0)
+        {
+            return BuildFailure("The selected device address is incomplete.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.TlsFingerprintSha256))
+        {
+            return BuildFailure("The selected device did not provide a TLS fingerprint.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.RecordsBase64))
+        {
+            return BuildFailure("There are no merged records to push.");
+        }
+
+        try
+        {
+            using var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
+                    ValidateFingerprint(certificate, request.TlsFingerprintSha256),
+            };
+
+            using var client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(10),
+            };
+
+            var payload = JsonSerializer.Serialize(
+                new
+                {
+                    recordsBase64 = request.RecordsBase64,
+                    sourceDeviceNameBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(GetCurrentDeviceName())),
+                },
+                JsonOptions);
+
+            using var response = await client.PostAsync(
+                new Uri($"https://{request.Host}:{request.Port}/apply-records"),
+                new StringContent(payload, Encoding.UTF8, "application/json"),
+                _lifetimeCts.Token);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return BuildFailure(
+                    $"LAN merged record upload failed: {(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+
+            return new HostOperationResult
+            {
+                Success = true,
+                Message = "Merged encrypted records were pushed to the selected device.",
+            };
+        }
+        catch (Exception ex)
+        {
+            return BuildFailure($"LAN merged record upload failed: {ex.Message}");
+        }
+    }
+
     public void Dispose()
     {
         _lifetimeCts.Cancel();
@@ -367,12 +468,36 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
     {
         if (_snapshotListener is null)
         {
-            StartSnapshotServer();
+            try
+            {
+                StartSnapshotServer();
+            }
+            catch
+            {
+                _snapshotListener = null;
+                _snapshotServerTask = null;
+            }
         }
 
         if (_discoveryResponder is null)
         {
-            StartDiscoveryResponder();
+            try
+            {
+                StartDiscoveryResponder();
+            }
+            catch
+            {
+                try
+                {
+                    _discoveryResponder?.Dispose();
+                }
+                catch
+                {
+                }
+
+                _discoveryResponder = null;
+                _discoveryResponderTask = null;
+            }
         }
     }
 
@@ -446,61 +571,145 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
                 return;
             }
 
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             string? line;
             do
             {
                 line = await reader.ReadLineAsync();
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                var separatorIndex = line.IndexOf(':');
+                if (separatorIndex <= 0)
+                {
+                    continue;
+                }
+
+                headers[line[..separatorIndex].Trim()] = line[(separatorIndex + 1)..].Trim();
             } while (!string.IsNullOrEmpty(line));
 
             var parts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2 || !string.Equals(parts[0], "GET", StringComparison.OrdinalIgnoreCase))
+            if (parts.Length < 2)
             {
                 await WriteHttpResponseAsync(
                     sslStream,
                     405,
                     "Method Not Allowed",
                     "text/plain; charset=utf-8",
-                    "Only GET is supported.",
+                    "Unsupported request.",
                     cancellationToken);
                 return;
             }
 
-            if (!string.Equals(parts[1], "/snapshot", StringComparison.OrdinalIgnoreCase))
+            var method = parts[0];
+            var path = parts[1];
+
+            if (string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(path, "/snapshot", StringComparison.OrdinalIgnoreCase))
             {
+                string snapshot;
+                lock (_snapshotLock)
+                {
+                    snapshot = _publishedSnapshot;
+                }
+
+                if (string.IsNullOrWhiteSpace(snapshot))
+                {
+                    await WriteHttpResponseAsync(
+                        sslStream,
+                        503,
+                        "Service Unavailable",
+                        "text/plain; charset=utf-8",
+                        "No snapshot published.",
+                        cancellationToken);
+                    return;
+                }
+
                 await WriteHttpResponseAsync(
                     sslStream,
-                    404,
-                    "Not Found",
-                    "text/plain; charset=utf-8",
-                    "Not found.",
+                    200,
+                    "OK",
+                    "application/json; charset=utf-8",
+                    snapshot,
                     cancellationToken);
                 return;
             }
 
-            string snapshot;
-            lock (_snapshotLock)
+            if (string.Equals(method, "POST", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(path, "/apply-records", StringComparison.OrdinalIgnoreCase))
             {
-                snapshot = _publishedSnapshot;
-            }
+                var contentLength = 0;
+                if (headers.TryGetValue("Content-Length", out var contentLengthValue))
+                {
+                    _ = int.TryParse(contentLengthValue, out contentLength);
+                }
 
-            if (string.IsNullOrWhiteSpace(snapshot))
-            {
+                if (contentLength <= 0)
+                {
+                    await WriteHttpResponseAsync(
+                        sslStream,
+                        400,
+                        "Bad Request",
+                        "text/plain; charset=utf-8",
+                        "Missing request body.",
+                        cancellationToken);
+                    return;
+                }
+
+                var bodyBuffer = new char[contentLength];
+                var totalRead = 0;
+                while (totalRead < contentLength)
+                {
+                    var read = await reader.ReadAsync(bodyBuffer.AsMemory(totalRead, contentLength - totalRead), cancellationToken);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    totalRead += read;
+                }
+
+                var bodyText = new string(bodyBuffer, 0, totalRead);
+                var payload = JsonDocument.Parse(bodyText);
+                var recordsJson = "[]";
+                if (payload.RootElement.TryGetProperty("recordsBase64", out var recordsBase64Element))
+                {
+                    var encoded = recordsBase64Element.GetString() ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(encoded))
+                    {
+                        recordsJson = Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+                    }
+                }
+                var sourceLabel = "LAN sync";
+                if (payload.RootElement.TryGetProperty("sourceDeviceNameBase64", out var sourceDeviceNameElement))
+                {
+                    var encodedSource = sourceDeviceNameElement.GetString() ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(encodedSource))
+                    {
+                        sourceLabel = Encoding.UTF8.GetString(Convert.FromBase64String(encodedSource));
+                    }
+                }
+
+                await _hostWebEventService.RequestIncrementalSyncApplyAsync(recordsJson, sourceLabel);
+
                 await WriteHttpResponseAsync(
                     sslStream,
-                    503,
-                    "Service Unavailable",
-                    "text/plain; charset=utf-8",
-                    "No snapshot published.",
+                    202,
+                    "Accepted",
+                    "application/json; charset=utf-8",
+                    "{\"accepted\":true}",
                     cancellationToken);
                 return;
             }
 
             await WriteHttpResponseAsync(
                 sslStream,
-                200,
-                "OK",
-                "application/json; charset=utf-8",
-                snapshot,
+                404,
+                "Not Found",
+                "text/plain; charset=utf-8",
+                "Not found.",
                 cancellationToken);
         }
         catch
@@ -536,8 +745,14 @@ public sealed class HostSyncService : IHostSyncService, IDisposable
 
     private void StartDiscoveryResponder()
     {
-        _discoveryResponder = new UdpClient(DiscoveryPort)
+        var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        socket.ExclusiveAddressUse = false;
+        socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        socket.Bind(new IPEndPoint(IPAddress.Any, DiscoveryPort));
+
+        _discoveryResponder = new UdpClient
         {
+            Client = socket,
             EnableBroadcast = true,
         };
 

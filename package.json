@@ -1,13 +1,16 @@
 {
   "name": "password-manager-webview",
   "private": true,
-  "version": "1.1.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "sync:maui": "node ./scripts/sync-maui-wwwroot.mjs",
     "build:hybrid": "npm run build && npm run sync:maui",
+    "build:passkey-companion": "dotnet build ./windows-passkey-plugin/PasswordVault.PasskeyCompanion/PasswordVault.PasskeyCompanion.csproj",
+    "build:passkey-companion:msix": "powershell -ExecutionPolicy Bypass -File ./scripts/build-passkey-companion-msix.ps1",
+    "debug:passkey-companion:identity": "powershell -ExecutionPolicy Bypass -File ./scripts/create-passkey-companion-debug-identity.ps1",
     "setup:android": "powershell -ExecutionPolicy Bypass -File ./scripts/build-android-apk.ps1",
     "setup:windows": "powershell -ExecutionPolicy Bypass -File ./scripts/build-windows-setup.ps1",
     "preview": "vite preview",
@@ -16,7 +19,9 @@
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
-    "@mdi/font": "7.4.47",
+    "@mdi/font": "^7.4.47",
+    "@mdi/js": "^7.4.47",
+    "fflate": "^0.8.2",
     "vue": "3.5.32",
     "vuetify": "3.12.5"
   },

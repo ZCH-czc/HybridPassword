@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import InlineSvgIcon from "@/components/InlineSvgIcon.vue";
 import { useAppPreferences } from "@/composables/useAppPreferences";
 
 const props = defineProps({
@@ -30,21 +31,25 @@ const searchLabel = computed(() =>
     <v-text-field
       :model-value="modelValue"
       class="flex-grow-1 top-bar-search"
+      data-tour-target="global-search"
       prepend-inner-icon="mdi-magnify"
-      :label="searchLabel"
+      :placeholder="searchLabel"
       rounded="pill"
       variant="solo-filled"
       :disabled="disabled"
       hide-details
       single-line
+      persistent-placeholder
       @update:model-value="emit('update:modelValue', $event)"
     />
 
     <v-btn
       color="primary"
       prepend-icon="mdi-plus"
-      height="56"
+      height="54"
+      rounded="pill"
       class="px-5 top-bar-create"
+      data-tour-target="create-password"
       :disabled="disabled"
       @click="emit('create')"
     >
@@ -54,19 +59,20 @@ const searchLabel = computed(() =>
     <v-btn
       variant="text"
       icon
-      size="56"
+      size="54"
       class="top-bar-lock"
       :disabled="disabled"
       @click="emit('lock')"
     >
-      <v-icon>mdi-lock-outline</v-icon>
+      <InlineSvgIcon icon="mdi-shield-lock-outline" :size="21" />
     </v-btn>
   </div>
 </template>
 
 <style scoped>
 .top-bar {
-  align-items: stretch;
+  align-items: center;
+  gap: 12px;
 }
 
 .top-bar-search {
@@ -74,30 +80,55 @@ const searchLabel = computed(() =>
 }
 
 :deep(.top-bar-search .v-field) {
-  min-height: 56px;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(var(--v-theme-surface), 0.82),
-      rgba(var(--v-theme-surface), 0.68)
-    ) !important;
-  box-shadow:
-    var(--vault-shadow-soft),
-    inset 0 1px 0 var(--vault-glass-highlight);
+  min-height: 54px;
+  background: var(--vault-toolbar-block) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+:deep(.top-bar-search .v-input__control),
+:deep(.top-bar-search .v-field__field) {
+  align-items: center;
+}
+
+:deep(.top-bar-search .v-field__input) {
+  display: flex;
+  align-items: center;
+  min-height: 54px;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+:deep(.top-bar-search .v-field__prepend-inner) {
+  align-self: center;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  margin-inline-end: 12px;
+  color: rgba(var(--v-theme-on-surface), 0.62);
 }
 
 .top-bar-lock {
   align-self: center;
-  background: rgba(var(--v-theme-surface), 0.52);
-  box-shadow:
-    var(--vault-shadow-soft),
-    inset 0 1px 0 var(--vault-glass-highlight);
+  background: var(--vault-toolbar-block);
+  box-shadow: none;
 }
 
 .top-bar-create {
-  box-shadow:
-    0 14px 28px rgba(47, 111, 237, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+  min-width: 116px;
+}
+
+:global(.v-theme--dark) .top-bar-search .v-field {
+  background: var(--vault-toolbar-block) !important;
+  box-shadow: none !important;
+}
+
+:global(.v-theme--dark) .top-bar-lock {
+  background: var(--vault-toolbar-block);
+  box-shadow: none;
 }
 
 @media (max-width: 680px) {
@@ -107,6 +138,10 @@ const searchLabel = computed(() =>
 
   .top-bar :deep(.v-btn__content) {
     white-space: nowrap;
+  }
+
+  .top-bar-create {
+    min-width: 102px;
   }
 }
 </style>

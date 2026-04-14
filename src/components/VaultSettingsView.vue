@@ -1,9 +1,16 @@
 <script setup>
 import { computed, ref } from "vue";
+import packageInfo from "../../package.json";
+import InlineSvgIcon from "@/components/InlineSvgIcon.vue";
+import AppLogStatusCard from "@/components/AppLogStatusCard.vue";
+import PendingImportReviewCard from "@/components/PendingImportReviewCard.vue";
+import PasskeyAppStatusCard from "@/components/PasskeyAppStatusCard.vue";
+import PasskeyMetadataCard from "@/components/PasskeyMetadataCard.vue";
 import { useAppPreferences } from "@/composables/useAppPreferences";
 import DeletedList from "@/components/DeletedList.vue";
 import ImportExportCard from "@/components/ImportExportCard.vue";
 import LanSyncCard from "@/components/LanSyncCard.vue";
+import { openExternalUrl } from "@/utils/native-bridge";
 import WebDavSyncCard from "@/components/WebDavSyncCard.vue";
 
 const props = defineProps({
@@ -22,6 +29,34 @@ const props = defineProps({
   deletedBusyIds: {
     type: Object,
     default: () => ({}),
+  },
+  deletedBatchLoading: {
+    type: Boolean,
+    default: false,
+  },
+  pendingImportReviewItems: {
+    type: Array,
+    default: () => [],
+  },
+  pendingImportReviewUpdatedAt: {
+    type: Number,
+    default: 0,
+  },
+  pendingImportReviewBusy: {
+    type: Boolean,
+    default: false,
+  },
+  appLogs: {
+    type: Array,
+    default: () => [],
+  },
+  appLogsUpdatedAt: {
+    type: Number,
+    default: 0,
+  },
+  appLogExporting: {
+    type: Boolean,
+    default: false,
   },
   nativeFileDialogsAvailable: {
     type: Boolean,
@@ -48,6 +83,10 @@ const props = defineProps({
     default: "zh-CN",
   },
   changingMasterPassword: {
+    type: Boolean,
+    default: false,
+  },
+  clearingData: {
     type: Boolean,
     default: false,
   },
@@ -147,6 +186,120 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  supportsPasskeys: {
+    type: Boolean,
+    default: false,
+  },
+  passkeyState: {
+    type: Object,
+    default: () => ({
+      isSupported: false,
+      supportsMetadataManagement: false,
+      supportsPluginManager: false,
+      requiresCompanionApp: true,
+      companionAppIntegrated: false,
+      canLaunchCompanionApp: false,
+      supportsCompanionAutoLaunch: false,
+      companionAutoLaunchEnabled: false,
+      apiVersion: 0,
+      hasPlatformAuthenticator: false,
+      platform: "web",
+      message: "",
+      pluginStatus: "",
+      companionCheckedAtUnixTimeMs: 0,
+      companionBuildNumber: 0,
+      companionUbr: 0,
+      companionMeetsPluginBuildRequirement: false,
+      companionWebAuthnLibraryAvailable: false,
+      companionPluginExportsAvailable: false,
+      companionIsPackagedProcess: false,
+      companionStatusSummary: "",
+      companionDetailMessage: "",
+      companionWorkflowMode: "skeleton",
+      companionRegistrationAttempted: false,
+      companionRegistrationPrepared: false,
+      companionRegistrationEnvironmentReady: false,
+      companionRegistrationCompleted: false,
+      companionLastRegistrationAttemptUnixTimeMs: 0,
+      companionRegistrationStatus: "",
+      companionLastRegistrationMessage: "",
+      companionLastRegistrationHResultHex: "",
+      companionAuthenticatorStateCode: 0,
+      companionAuthenticatorStateLabel: "unknown",
+      companionHasOperationSigningPublicKey: false,
+      companionOperationSigningPublicKeyStoredAtUnixTimeMs: 0,
+      companionComSkeletonReady: false,
+      companionComClassIdMatchesManifest: false,
+      companionComFactoryReady: false,
+      companionComAuthenticatorReady: false,
+    companionComLastProbeUnixTimeMs: 0,
+    companionComLastProbeMessage: "",
+    companionComAuthenticatorTypeName: "",
+    companionComClassFactoryRegistered: false,
+    companionComClassFactoryRegistrationCookie: 0,
+    companionComClassFactoryLastRegistrationUnixTimeMs: 0,
+    companionComClassFactoryLastMessage: "",
+    companionComClassFactoryLastHResultHex: "",
+    companionCallbackTotalCount: 0,
+    companionCallbackMakeCredentialCount: 0,
+    companionCallbackGetAssertionCount: 0,
+    companionCallbackCancelOperationCount: 0,
+    companionCallbackGetLockStatusCount: 0,
+    companionCallbackLastUnixTimeMs: 0,
+    companionCallbackLastKind: "",
+    companionCallbackLastMessage: "",
+    companionCallbackLastHResultHex: "",
+    companionLatestOperationId: "",
+    companionLatestOperationKind: "",
+    companionLatestOperationState: "idle",
+    companionLatestOperationSource: "",
+    companionLatestOperationCreatedAtUnixTimeMs: 0,
+    companionLatestOperationUpdatedAtUnixTimeMs: 0,
+    companionLatestOperationRequestPointerPresent: false,
+    companionLatestOperationResponsePointerPresent: false,
+    companionLatestOperationCancelPointerPresent: false,
+    companionLatestOperationMessage: "",
+    companionLatestOperationHResultHex: "",
+    companionActivationCount: 0,
+      companionLastActivationUnixTimeMs: 0,
+      companionLastActivationSource: "",
+      companionStartedFromPluginActivation: false,
+      companionCreateRequestCount: 0,
+      companionLastCreateRequestUnixTimeMs: 0,
+      companionLastCreateRequestRpId: "",
+      companionLastCreateRequestUsername: "",
+      companionLastCreateRequestMessage: "",
+      recentLogs: [],
+    }),
+  },
+  passkeyItems: {
+    type: Array,
+    default: () => [],
+  },
+  deletedPasskeyItems: {
+    type: Array,
+    default: () => [],
+  },
+  passkeyRefreshing: {
+    type: Boolean,
+    default: false,
+  },
+  passkeyLaunching: {
+    type: Boolean,
+    default: false,
+  },
+  passkeyAutoLaunchSaving: {
+    type: Boolean,
+    default: false,
+  },
+  passkeyOperationResolving: {
+    type: Boolean,
+    default: false,
+  },
+  passkeyBusyIds: {
+    type: Object,
+    default: () => ({}),
+  },
   syncSettings: {
     type: Object,
     default: () => ({
@@ -208,12 +361,100 @@ const emit = defineEmits([
   "save-device-name",
   "scan-lan",
   "sync-lan-device",
+  "refresh-passkeys",
+  "launch-passkey-companion",
+  "restart-passkey-companion",
+  "toggle-passkey-companion-auto-launch",
+  "resolve-passkey-operation",
+  "remove-passkey",
+  "restore-passkey",
+  "permanent-delete-passkey",
+  "clear-all-data",
   "restore",
   "permanent-delete",
+  "restore-many",
+  "permanent-delete-many",
+  "manual-add-pending-import",
+  "manual-add-many-pending-import",
+  "dismiss-pending-import",
+  "dismiss-many-pending-import",
+  "export-app-logs",
 ]);
 
 const activeSection = ref("root");
+const secretKeyVisible = ref(false);
 const { t, themeModeOptions, localeOptions, navAlignmentOptions } = useAppPreferences();
+const repositoryUrl = "https://github.com/ZCH-czc/HybridPassword";
+const appVersion = packageInfo.version || "0.0.0";
+
+const isZh = computed(() => String(props.locale || "").toLowerCase().startsWith("zh"));
+const aboutCopy = computed(() =>
+  isZh.value
+    ? {
+        title: "关于",
+        subtitle: "项目来源、技术栈与版本信息",
+        heroTitle: "HybridPassword",
+        heroBody: "一个面向 Windows、Android 与 Web 的本地优先密码管理器",
+        versionTitle: "当前版本",
+        sourceTitle: "Source Code",
+        sourceBody: "GitHub 仓库地址",
+        stackTitle: "技术栈",
+        stackBody: "核心实现",
+        openLink: "打开链接",
+      }
+    : {
+        title: "About",
+        subtitle: "Project source, stack, and version details",
+        heroTitle: "HybridPassword",
+        heroBody: "A local-first password manager for Windows, Android, and the web",
+        versionTitle: "Current version",
+        sourceTitle: "Source Code",
+        sourceBody: "GitHub repository",
+        stackTitle: "Tech stack",
+        stackBody: "Core stack",
+        openLink: "Open link",
+      }
+);
+
+const aboutStack = computed(() =>
+  isZh.value
+    ? [
+        { title: "Vue 3" },
+        { title: ".NET MAUI Hybrid" },
+      ]
+    : [
+        { title: "Vue 3" },
+        { title: ".NET MAUI Hybrid" },
+      ]
+);
+
+const passkeyNavCopy = computed(() =>
+  isZh.value
+    ? {
+        title: "Passkeys",
+        subtitle: "Windows 原生 passkey 元数据与能力状态",
+        tagReady: "Windows",
+        tagUnavailable: "未就绪",
+      }
+    : {
+        title: "Passkeys",
+        subtitle: "Windows-native passkey metadata and capability state",
+        tagReady: "Windows",
+        tagUnavailable: "Unavailable",
+      }
+);
+
+const aboutSectionMeta = computed(() => ({
+  "about-logs": {
+    key: "about-logs",
+    title: isZh.value ? "应用日志" : "Application logs",
+    subtitle: isZh.value
+      ? "查看应用运行、同步与错误日志，并支持导出"
+      : "Review app events, sync activity, and errors, then export them",
+    icon: "mdi-text-box-search-outline",
+    tag: t("common.countItems", { count: props.appLogs.length }),
+  },
+}));
 
 const languageChoiceOptions = computed(() => [
   {
@@ -366,6 +607,47 @@ const showPlatformSection = computed(
     props.supportsAutostartSettingsShortcut
 );
 
+const secretKeyToggleLabel = computed(() =>
+  secretKeyVisible.value
+    ? isZh.value
+      ? "隐藏 Secret Key"
+      : "Hide Secret Key"
+    : t("settings.revealSecretKey")
+);
+
+const secretKeyDisplay = computed(() => {
+  if (secretKeyVisible.value && props.secretKeyValue) {
+    return props.secretKeyValue;
+  }
+
+  if (props.secretKeyHint) {
+    return props.secretKeyHint;
+  }
+
+  return isZh.value ? "默认隐藏，点击按钮后显示" : "Hidden until you choose to reveal it";
+});
+
+const passkeySectionMeta = computed(() => ({
+  passkeys: {
+    key: "passkeys",
+    title: "Passkeys",
+    subtitle: isZh.value
+      ? "查看 Windows 中已保存的 passkey 与账户信息"
+      : "View saved Windows passkeys and account metadata",
+    icon: "mdi-key-chain-variant",
+    tag: props.passkeyState.isSupported ? "Windows" : isZh.value ? "未就绪" : "Unavailable",
+  },
+  "passkey-status": {
+    key: "passkey-status",
+    title: isZh.value ? "应用状态" : "App status",
+    subtitle: isZh.value
+      ? "日志、Companion 与能力诊断"
+      : "Logs, companion state, and diagnostics",
+    icon: "mdi-chart-box-outline",
+    tag: "",
+  },
+}));
+
 const rootItems = computed(() => {
   const items = [
     {
@@ -394,6 +676,10 @@ const rootItems = computed(() => {
     });
   }
 
+  if (props.supportsPasskeys) {
+    items.push(passkeySectionMeta.value.passkeys);
+  }
+
   items.push({
     key: "data",
     title: t("settings.dataManagement"),
@@ -412,12 +698,22 @@ const rootItems = computed(() => {
     });
   }
 
+  items.push({
+    key: "about",
+    title: aboutCopy.value.title,
+    subtitle: aboutCopy.value.subtitle,
+    icon: "mdi-information-outline",
+    tag: `v${appVersion}`,
+  });
+
   return items;
 });
 
 const currentSection = computed(
   () =>
-    rootItems.value.find((item) => item.key === activeSection.value) || {
+    rootItems.value.find((item) => item.key === activeSection.value) ||
+    passkeySectionMeta.value[activeSection.value] ||
+    aboutSectionMeta.value[activeSection.value] || {
       key: "root",
       title: t("common.settings"),
       subtitle: t("settings.sectionListHint"),
@@ -427,11 +723,39 @@ const currentSection = computed(
 );
 
 function openSection(key) {
+  secretKeyVisible.value = false;
   activeSection.value = key;
 }
 
 function goBack() {
+  secretKeyVisible.value = false;
+  if (activeSection.value === "passkey-status") {
+    activeSection.value = "passkeys";
+    return;
+  }
+
+  if (activeSection.value === "about-logs") {
+    activeSection.value = "about";
+    return;
+  }
+
   activeSection.value = "root";
+}
+
+async function openRepositoryUrl() {
+  await openExternalUrl(repositoryUrl);
+}
+
+function handleToggleSecretKey() {
+  if (secretKeyVisible.value) {
+    secretKeyVisible.value = false;
+    return;
+  }
+
+  secretKeyVisible.value = true;
+  if (!props.secretKeyValue) {
+    emit("reveal-secret-key");
+  }
 }
 </script>
 
@@ -455,39 +779,37 @@ function goBack() {
             </v-card-text>
           </v-card>
 
-          <v-card class="border-sm mt-4">
-            <v-list class="bg-transparent py-2 px-2" lines="two">
-              <v-list-item
-                v-for="item in rootItems"
-                :key="item.key"
-                class="settings-nav-item my-1"
-                rounded="xl"
-                @click="openSection(item.key)"
-              >
-                <template #prepend>
-                  <v-avatar size="42" color="surface-variant" variant="flat">
-                    <v-icon>{{ item.icon }}</v-icon>
-                  </v-avatar>
-                </template>
+          <div class="settings-nav-stack mt-4" data-tour-target="settings-sections">
+            <button
+              v-for="item in rootItems"
+              :key="item.key"
+              type="button"
+              class="settings-nav-card"
+              @click="openSection(item.key)"
+            >
+              <div class="settings-nav-card__main">
+                <v-avatar size="42" class="settings-nav-avatar">
+                  <InlineSvgIcon :icon="item.icon" :size="21" />
+                </v-avatar>
 
-                <v-list-item-title class="font-weight-medium">
-                  {{ item.title }}
-                </v-list-item-title>
-                <v-list-item-subtitle class="text-wrap mt-1">
-                  {{ item.subtitle }}
-                </v-list-item-subtitle>
-
-                <template #append>
-                  <div class="d-flex align-center ga-2">
-                    <v-chip v-if="item.tag" size="small" variant="flat" class="settings-nav-chip">
-                      {{ item.tag }}
-                    </v-chip>
-                    <v-icon size="20">mdi-chevron-right</v-icon>
+                <div class="min-w-0">
+                  <div class="font-weight-medium text-subtitle-1">
+                    {{ item.title }}
                   </div>
-                </template>
-              </v-list-item>
-            </v-list>
-          </v-card>
+                  <div class="text-body-2 text-medium-emphasis mt-1 text-wrap">
+                    {{ item.subtitle }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-nav-card__aside">
+                <span v-if="item.tag" class="settings-nav-tag">
+                  {{ item.tag }}
+                </span>
+                <InlineSvgIcon icon="mdi-chevron-right" :size="18" />
+              </div>
+            </button>
+          </div>
         </template>
 
         <template v-else>
@@ -495,7 +817,7 @@ function goBack() {
             <v-card-text class="pa-4 pa-sm-5 d-flex align-center justify-space-between ga-3">
               <div class="d-flex align-center ga-3 min-w-0">
                 <v-btn icon variant="text" @click="goBack">
-                  <v-icon>mdi-chevron-left</v-icon>
+                  <InlineSvgIcon icon="mdi-chevron-left" :size="20" />
                 </v-btn>
                 <div class="min-w-0">
                   <div class="text-h5 font-weight-medium text-truncate">
@@ -690,7 +1012,7 @@ function goBack() {
                   <v-sheet class="px-4 py-3 bg-surface-variant text-body-2 mt-4">
                     <div class="font-weight-medium">{{ t("settings.secretKeyHintTitle") }}</div>
                     <div class="text-medium-emphasis mt-1">
-                      {{ secretKeyValue || secretKeyHint || t("common.none") }}
+                      {{ secretKeyDisplay }}
                     </div>
                   </v-sheet>
 
@@ -699,9 +1021,9 @@ function goBack() {
                       color="primary"
                       prepend-icon="mdi-key-outline"
                       :loading="secretKeyLoading"
-                      @click="emit('reveal-secret-key')"
+                      @click="handleToggleSecretKey"
                     >
-                      {{ t("settings.revealSecretKey") }}
+                      {{ secretKeyToggleLabel }}
                     </v-btn>
                     <v-btn
                       variant="tonal"
@@ -715,6 +1037,112 @@ function goBack() {
                 </v-sheet>
               </v-card-text>
             </v-card>
+          </div>
+
+          <div v-else-if="activeSection === 'passkeys'" class="d-flex flex-column ga-4 mt-4">
+            <PasskeyMetadataCard
+              :locale="locale"
+              :platform="platform"
+              :supported="passkeyState.isSupported"
+              :supports-metadata-management="passkeyState.supportsMetadataManagement"
+              :has-platform-authenticator="passkeyState.hasPlatformAuthenticator"
+              :companion-app-integrated="passkeyState.companionAppIntegrated"
+              :items="passkeyItems"
+              :deleted-items="deletedPasskeyItems"
+              :refreshing="passkeyRefreshing"
+              :busy-ids="passkeyBusyIds"
+              @refresh="emit('refresh-passkeys')"
+              @open-status="openSection('passkey-status')"
+              @remove="emit('remove-passkey', $event)"
+              @restore="emit('restore-passkey', $event)"
+              @permanent-delete="emit('permanent-delete-passkey', $event)"
+            />
+          </div>
+
+          <div v-else-if="activeSection === 'passkey-status'" class="d-flex flex-column ga-4 mt-4">
+            <PasskeyAppStatusCard
+              :locale="locale"
+              :platform="platform"
+              :supports-plugin-manager="passkeyState.supportsPluginManager"
+              :requires-companion-app="passkeyState.requiresCompanionApp"
+              :companion-app-integrated="passkeyState.companionAppIntegrated"
+              :can-launch-companion-app="passkeyState.canLaunchCompanionApp"
+              :supports-companion-auto-launch="passkeyState.supportsCompanionAutoLaunch"
+              :companion-auto-launch-enabled="passkeyState.companionAutoLaunchEnabled"
+            :launching-companion="passkeyLaunching"
+            :auto-launch-saving="passkeyAutoLaunchSaving"
+            :operation-resolving="passkeyOperationResolving"
+            :companion-checked-at-unix-time-ms="passkeyState.companionCheckedAtUnixTimeMs"
+              :companion-build-number="passkeyState.companionBuildNumber"
+              :companion-ubr="passkeyState.companionUbr"
+              :companion-meets-plugin-build-requirement="passkeyState.companionMeetsPluginBuildRequirement"
+              :companion-web-authn-library-available="passkeyState.companionWebAuthnLibraryAvailable"
+            :companion-plugin-exports-available="passkeyState.companionPluginExportsAvailable"
+            :companion-is-packaged-process="passkeyState.companionIsPackagedProcess"
+            :companion-status-summary="passkeyState.companionStatusSummary"
+            :companion-detail-message="passkeyState.companionDetailMessage"
+            :companion-workflow-mode="passkeyState.companionWorkflowMode"
+            :companion-registration-attempted="passkeyState.companionRegistrationAttempted"
+            :companion-registration-prepared="passkeyState.companionRegistrationPrepared"
+            :companion-registration-environment-ready="passkeyState.companionRegistrationEnvironmentReady"
+            :companion-registration-completed="passkeyState.companionRegistrationCompleted"
+            :companion-last-registration-attempt-unix-time-ms="passkeyState.companionLastRegistrationAttemptUnixTimeMs"
+            :companion-registration-status="passkeyState.companionRegistrationStatus"
+            :companion-last-registration-message="passkeyState.companionLastRegistrationMessage"
+            :companion-last-registration-h-result-hex="passkeyState.companionLastRegistrationHResultHex"
+            :companion-authenticator-state-code="passkeyState.companionAuthenticatorStateCode"
+            :companion-authenticator-state-label="passkeyState.companionAuthenticatorStateLabel"
+            :companion-has-operation-signing-public-key="passkeyState.companionHasOperationSigningPublicKey"
+            :companion-operation-signing-public-key-stored-at-unix-time-ms="passkeyState.companionOperationSigningPublicKeyStoredAtUnixTimeMs"
+            :companion-com-skeleton-ready="passkeyState.companionComSkeletonReady"
+            :companion-com-class-id-matches-manifest="passkeyState.companionComClassIdMatchesManifest"
+            :companion-com-factory-ready="passkeyState.companionComFactoryReady"
+            :companion-com-authenticator-ready="passkeyState.companionComAuthenticatorReady"
+            :companion-com-last-probe-unix-time-ms="passkeyState.companionComLastProbeUnixTimeMs"
+            :companion-com-last-probe-message="passkeyState.companionComLastProbeMessage"
+            :companion-com-authenticator-type-name="passkeyState.companionComAuthenticatorTypeName"
+            :companion-com-class-factory-registered="passkeyState.companionComClassFactoryRegistered"
+            :companion-com-class-factory-registration-cookie="passkeyState.companionComClassFactoryRegistrationCookie"
+            :companion-com-class-factory-last-registration-unix-time-ms="passkeyState.companionComClassFactoryLastRegistrationUnixTimeMs"
+            :companion-com-class-factory-last-message="passkeyState.companionComClassFactoryLastMessage"
+            :companion-com-class-factory-last-h-result-hex="passkeyState.companionComClassFactoryLastHResultHex"
+            :companion-callback-total-count="passkeyState.companionCallbackTotalCount"
+            :companion-callback-make-credential-count="passkeyState.companionCallbackMakeCredentialCount"
+            :companion-callback-get-assertion-count="passkeyState.companionCallbackGetAssertionCount"
+            :companion-callback-cancel-operation-count="passkeyState.companionCallbackCancelOperationCount"
+            :companion-callback-get-lock-status-count="passkeyState.companionCallbackGetLockStatusCount"
+            :companion-callback-last-unix-time-ms="passkeyState.companionCallbackLastUnixTimeMs"
+            :companion-callback-last-kind="passkeyState.companionCallbackLastKind"
+            :companion-callback-last-message="passkeyState.companionCallbackLastMessage"
+            :companion-callback-last-h-result-hex="passkeyState.companionCallbackLastHResultHex"
+            :companion-latest-operation-id="passkeyState.companionLatestOperationId"
+            :companion-latest-operation-kind="passkeyState.companionLatestOperationKind"
+            :companion-latest-operation-state="passkeyState.companionLatestOperationState"
+            :companion-latest-operation-source="passkeyState.companionLatestOperationSource"
+            :companion-latest-operation-created-at-unix-time-ms="passkeyState.companionLatestOperationCreatedAtUnixTimeMs"
+            :companion-latest-operation-updated-at-unix-time-ms="passkeyState.companionLatestOperationUpdatedAtUnixTimeMs"
+            :companion-latest-operation-request-pointer-present="passkeyState.companionLatestOperationRequestPointerPresent"
+            :companion-latest-operation-response-pointer-present="passkeyState.companionLatestOperationResponsePointerPresent"
+            :companion-latest-operation-cancel-pointer-present="passkeyState.companionLatestOperationCancelPointerPresent"
+            :companion-latest-operation-message="passkeyState.companionLatestOperationMessage"
+            :companion-latest-operation-h-result-hex="passkeyState.companionLatestOperationHResultHex"
+            :companion-activation-count="passkeyState.companionActivationCount"
+            :companion-last-activation-unix-time-ms="passkeyState.companionLastActivationUnixTimeMs"
+            :companion-last-activation-source="passkeyState.companionLastActivationSource"
+            :companion-started-from-plugin-activation="passkeyState.companionStartedFromPluginActivation"
+            :companion-create-request-count="passkeyState.companionCreateRequestCount"
+            :companion-last-create-request-unix-time-ms="passkeyState.companionLastCreateRequestUnixTimeMs"
+            :companion-last-create-request-rp-id="passkeyState.companionLastCreateRequestRpId"
+            :companion-last-create-request-username="passkeyState.companionLastCreateRequestUsername"
+            :companion-last-create-request-message="passkeyState.companionLastCreateRequestMessage"
+            :recent-logs="passkeyState.recentLogs"
+            @launch-companion="emit('launch-passkey-companion')"
+            @restart-companion="emit('restart-passkey-companion')"
+            @toggle-auto-launch="emit('toggle-passkey-companion-auto-launch', $event)"
+            @approve-operation="emit('resolve-passkey-operation', 'approve')"
+            @reject-operation="emit('resolve-passkey-operation', 'reject')"
+            @clear-operation="emit('resolve-passkey-operation', 'clear')"
+          />
           </div>
 
           <div v-else-if="activeSection === 'sync'" class="d-flex flex-column ga-4 mt-4">
@@ -743,11 +1171,38 @@ function goBack() {
           </div>
 
           <div v-else-if="activeSection === 'data'" class="d-flex flex-column ga-4 mt-4">
+            <v-card class="border-sm">
+              <v-card-title>{{ t("settings.clearAllData") }}</v-card-title>
+              <v-card-text>
+                <v-sheet class="pa-4 settings-block">
+                  <div class="text-subtitle-1 font-weight-medium">
+                    {{ t("settings.clearAllData") }}
+                  </div>
+                  <div class="text-body-2 text-medium-emphasis mt-2">
+                    {{ t("settings.clearAllDataBody") }}
+                  </div>
+
+                  <v-btn
+                    class="mt-4"
+                    color="error"
+                    prepend-icon="mdi-trash-can-outline"
+                    :loading="clearingData"
+                    @click="emit('clear-all-data')"
+                  >
+                    {{ t("settings.clearAllDataAction") }}
+                  </v-btn>
+                </v-sheet>
+              </v-card-text>
+            </v-card>
+
             <DeletedList
               :items="deletedItems"
               :busy-ids="deletedBusyIds"
+              :batch-loading="deletedBatchLoading"
               @restore="emit('restore', $event)"
               @permanent-delete="emit('permanent-delete', $event)"
+              @restore-many="emit('restore-many', $event)"
+              @permanent-delete-many="emit('permanent-delete-many', $event)"
             />
 
             <ImportExportCard
@@ -757,6 +1212,16 @@ function goBack() {
               @update:import-strategy="emit('update:importStrategy', $event)"
               @export="emit('export', $event)"
               @import="emit('import', $event)"
+            />
+
+            <PendingImportReviewCard
+              :items="pendingImportReviewItems"
+              :updated-at="pendingImportReviewUpdatedAt"
+              :busy="pendingImportReviewBusy"
+              @manual-add="emit('manual-add-pending-import', $event)"
+              @manual-add-many="emit('manual-add-many-pending-import', $event)"
+              @dismiss="emit('dismiss-pending-import', $event)"
+              @dismiss-many="emit('dismiss-many-pending-import', $event)"
             />
           </div>
 
@@ -914,6 +1379,119 @@ function goBack() {
               </v-card-text>
             </v-card>
           </div>
+
+          <div v-else-if="activeSection === 'about'" class="d-flex flex-column ga-4 mt-4">
+            <v-card class="border-sm about-card">
+              <v-card-text class="pa-6 pa-sm-8">
+                <div class="about-hero">
+                  <v-avatar size="96" class="about-hero__avatar">
+                    <InlineSvgIcon icon="mdi-shield-lock-outline" :size="48" />
+                  </v-avatar>
+
+                  <div class="text-h4 font-weight-bold mt-5">
+                    {{ aboutCopy.heroTitle }}
+                  </div>
+                  <div class="text-body-1 text-medium-emphasis mt-2 about-hero__body">
+                    {{ aboutCopy.heroBody }}
+                  </div>
+                </div>
+
+                <div class="d-flex flex-column ga-3 mt-8">
+                  <div class="about-panel">
+                    <div class="about-panel__row">
+                      <div class="about-panel__head">
+                        <InlineSvgIcon icon="mdi-information-outline" :size="18" />
+                        <span>{{ aboutCopy.versionTitle }}</span>
+                      </div>
+                      <span class="about-panel__value">v{{ appVersion }}</span>
+                    </div>
+                  </div>
+
+                  <div class="about-panel">
+                    <div class="about-panel__row about-panel__row--start">
+                      <div>
+                        <div class="about-panel__title">{{ aboutCopy.sourceTitle }}</div>
+                        <div class="text-body-2 text-medium-emphasis mt-1">
+                          {{ aboutCopy.sourceBody }}
+                        </div>
+                      </div>
+
+                      <v-btn variant="text" class="about-panel__action" @click="openRepositoryUrl">
+                        <template #prepend>
+                          <InlineSvgIcon icon="mdi-open-in-new" :size="18" />
+                        </template>
+                        {{ aboutCopy.openLink }}
+                      </v-btn>
+                    </div>
+
+                    <a
+                      class="about-link mt-3"
+                      :href="repositoryUrl"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <InlineSvgIcon icon="mdi-github" :size="18" />
+                      <span>{{ repositoryUrl }}</span>
+                    </a>
+                  </div>
+
+                  <div class="about-panel">
+                    <div class="about-panel__title">{{ aboutCopy.stackTitle }}</div>
+                    <div class="text-body-2 text-medium-emphasis mt-1">
+                      {{ aboutCopy.stackBody }}
+                    </div>
+
+                    <div class="d-flex flex-column ga-3 mt-4">
+                      <div v-for="item in aboutStack" :key="item.title" class="about-stack-item">
+                        <div class="about-stack-item__title">
+                          <InlineSvgIcon icon="mdi-code-tags" :size="18" />
+                          <span>{{ item.title }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="settings-nav-card about-nav-card"
+                    @click="openSection('about-logs')"
+                  >
+                    <div class="settings-nav-card__main">
+                      <v-avatar size="44" class="settings-nav-avatar">
+                        <InlineSvgIcon icon="mdi-text-box-search-outline" :size="22" />
+                      </v-avatar>
+
+                      <div class="min-w-0">
+                        <div class="text-subtitle-1 font-weight-medium">
+                          {{ aboutSectionMeta["about-logs"].title }}
+                        </div>
+                        <div class="text-body-2 text-medium-emphasis mt-1">
+                          {{ aboutSectionMeta["about-logs"].subtitle }}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="settings-nav-card__aside">
+                      <span class="settings-nav-tag">{{ aboutSectionMeta["about-logs"].tag }}</span>
+                      <InlineSvgIcon icon="mdi-chevron-right" :size="20" />
+                    </div>
+                  </button>
+                </div>
+              </v-card-text>
+            </v-card>
+          </div>
+
+          <div v-else-if="activeSection === 'about-logs'" class="d-flex flex-column ga-4 mt-4">
+            <AppLogStatusCard
+              :locale="locale"
+              :platform="platform"
+              :app-version="appVersion"
+              :logs="appLogs"
+              :updated-at="appLogsUpdatedAt"
+              :exporting="appLogExporting"
+              @export="emit('export-app-logs')"
+            />
+          </div>
         </template>
       </div>
     </Transition>
@@ -923,18 +1501,14 @@ function goBack() {
 <style scoped>
 .settings-root-card,
 .settings-detail-card {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(var(--v-theme-surface), 0.92),
-      rgba(var(--v-theme-surface), 0.78)
-    ),
-    radial-gradient(circle at top right, rgba(var(--v-theme-primary), 0.08), transparent 34%);
+  background: var(--vault-panel-bg);
 }
 
 .settings-nav-item {
   border-radius: var(--vault-radius) !important;
   cursor: pointer;
+  background: transparent !important;
+  box-shadow: none !important;
   transition:
     background-color 220ms ease,
     transform 220ms ease,
@@ -942,8 +1516,78 @@ function goBack() {
 }
 
 .settings-nav-item:hover {
-  background: rgba(var(--v-theme-surface-variant), 0.82);
+  background: rgba(var(--v-theme-surface-variant), 0.42) !important;
   transform: translateY(-1px);
+}
+
+.settings-nav-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-nav-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  padding: 18px 20px;
+  border: none;
+  border-radius: calc(var(--vault-radius) + 2px);
+  background: rgba(var(--v-theme-surface), 0.48);
+  box-shadow: none;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform 220ms ease,
+    background-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.settings-nav-card:hover {
+  transform: translateY(-1px);
+  background: rgba(var(--v-theme-surface), 0.6);
+}
+
+.settings-nav-card:focus-visible {
+  outline: none;
+  background: rgba(var(--v-theme-surface), 0.62);
+}
+
+.settings-nav-card__main,
+.settings-nav-card__aside {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-nav-card__main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.settings-nav-card__aside {
+  color: rgba(var(--v-theme-on-surface), 0.64);
+}
+
+.settings-nav-avatar {
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  color: rgba(var(--v-theme-on-surface), 0.74);
+}
+
+.settings-nav-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  color: rgba(var(--v-theme-on-surface), 0.76);
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .settings-nav-chip {
@@ -951,11 +1595,92 @@ function goBack() {
 }
 
 .settings-block {
-  background: rgba(var(--v-theme-surface), 0.62);
+  background: var(--vault-block-bg);
+}
+
+.about-card {
+  background: var(--vault-panel-bg);
+}
+
+.about-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.about-hero__avatar {
+  background:
+    radial-gradient(circle at 32% 28%, rgba(var(--v-theme-secondary), 0.22), transparent 56%),
+    rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.92);
+}
+
+.about-hero__body {
+  max-width: 520px;
+}
+
+.about-panel {
+  padding: 18px 20px;
+  border-radius: calc(var(--vault-radius) + 4px);
+  background: var(--vault-block-bg);
+}
+
+.about-panel__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.about-panel__row--start {
+  align-items: flex-start;
+}
+
+.about-panel__head,
+.about-stack-item__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.about-panel__title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.about-panel__value {
+  color: rgba(var(--v-theme-on-surface), 0.74);
+  font-weight: 600;
+}
+
+.about-panel__action {
+  align-self: center;
+}
+
+.about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  color: inherit;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.about-link:hover {
+  opacity: 0.88;
+}
+
+.about-stack-item {
+  padding: 14px 16px;
+  border-radius: calc(var(--vault-radius) - 2px);
+  background: var(--vault-block-bg-subtle);
 }
 
 .settings-choice-shell {
-  background: rgba(var(--v-theme-surface), 0.6);
+  background: var(--vault-block-bg);
 }
 
 .settings-choice-label {
@@ -980,14 +1705,14 @@ function goBack() {
   gap: 10px;
   padding-inline: 16px;
   color: rgb(var(--v-theme-on-surface));
-  background: rgba(var(--v-theme-surface), 0.76);
+  background: var(--vault-block-bg-subtle);
   box-shadow: none;
 }
 
 .settings-toggle :deep(.settings-toggle__active) {
-  background: rgba(var(--v-theme-primary), 0.14);
+  background: rgba(var(--v-theme-primary), 0.12);
   color: rgb(var(--v-theme-primary));
-  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-primary), 0.18);
+  box-shadow: none;
 }
 
 .settings-toggle :deep(.v-btn__content) {
@@ -1014,5 +1739,50 @@ function goBack() {
 
 .min-w-0 {
   min-width: 0;
+}
+
+:deep(.settings-nav-item .v-list-item__overlay),
+:deep(.settings-nav-item .v-ripple__container) {
+  display: none !important;
+}
+
+:global(.v-theme--dark) .settings-nav-avatar {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(var(--v-theme-on-surface), 0.8);
+}
+
+:global(.v-theme--dark) .settings-nav-card {
+  background: rgba(var(--v-theme-surface), 0.34);
+}
+
+:global(.v-theme--dark) .settings-nav-card:hover,
+:global(.v-theme--dark) .settings-nav-card:focus-visible {
+  background: rgba(var(--v-theme-surface), 0.46);
+}
+
+:global(.v-theme--dark) .settings-nav-tag {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(var(--v-theme-on-surface), 0.82);
+}
+
+:global(.v-theme--dark) .about-hero__avatar {
+  background:
+    radial-gradient(circle at 32% 28%, rgba(var(--v-theme-secondary), 0.18), transparent 56%),
+    rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 640px) {
+  .about-panel {
+    padding: 16px 16px;
+  }
+
+  .about-panel__row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .about-panel__action {
+    align-self: stretch;
+  }
 }
 </style>

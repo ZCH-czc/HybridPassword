@@ -4,17 +4,20 @@ public sealed class PasswordVaultHostBridge
 {
     private readonly IBiometricUnlockService _biometricUnlockService;
     private readonly IHostFileDialogService _hostFileDialogService;
+    private readonly IPasskeyHostService _passkeyHostService;
     private readonly IHostPlatformService _hostPlatformService;
     private readonly IHostSyncService _hostSyncService;
 
     public PasswordVaultHostBridge(
         IBiometricUnlockService biometricUnlockService,
         IHostFileDialogService hostFileDialogService,
+        IPasskeyHostService passkeyHostService,
         IHostPlatformService hostPlatformService,
         IHostSyncService hostSyncService)
     {
         _biometricUnlockService = biometricUnlockService;
         _hostFileDialogService = hostFileDialogService;
+        _passkeyHostService = passkeyHostService;
         _hostPlatformService = hostPlatformService;
         _hostSyncService = hostSyncService;
     }
@@ -25,8 +28,56 @@ public sealed class PasswordVaultHostBridge
         state.SupportsNativeFileDialogs = true;
         state.SupportsWebDavSync = true;
         state.SupportsLanSync = true;
+        state.SupportsPasskeys = (await _passkeyHostService.GetStateAsync()).IsSupported;
         await _hostPlatformService.EnrichHostBridgeStateAsync(state);
         return state;
+    }
+
+    public async Task<HostOperationResult> ClearHostStoredData()
+    {
+        var messages = new List<string>();
+
+        var biometricResult = await _biometricUnlockService.DisableAsync();
+        if (!biometricResult.Success)
+        {
+            return biometricResult;
+        }
+
+        if (!string.IsNullOrWhiteSpace(biometricResult.Message))
+        {
+            messages.Add(biometricResult.Message);
+        }
+
+        var syncResult = await _hostSyncService.ResetSyncStateAsync();
+        if (!syncResult.Success)
+        {
+            return syncResult;
+        }
+
+        if (!string.IsNullOrWhiteSpace(syncResult.Message))
+        {
+            messages.Add(syncResult.Message);
+        }
+
+        var platformResult = await _hostPlatformService.ResetPlatformStateAsync();
+        if (!platformResult.Success)
+        {
+            return platformResult;
+        }
+
+        if (!string.IsNullOrWhiteSpace(platformResult.Message))
+        {
+            messages.Add(platformResult.Message);
+        }
+
+        return new HostOperationResult
+        {
+            Success = true,
+            Message = messages.Count > 0
+                ? string.Join(" ", messages)
+                : "Host data cleared.",
+            IsBiometricEnabled = false,
+        };
     }
 
     public Task<HostOperationResult> EnableBiometricUnlock(StoreVaultKeyRequest request)
@@ -62,9 +113,9 @@ public sealed class PasswordVaultHostBridge
             request?.MimeType ?? "text/plain;charset=utf-8");
     }
 
-    public Task<HostFileOperationResult> PickCsvFile()
+    public Task<HostFileOperationResult> PickImportFile()
     {
-        return _hostFileDialogService.PickCsvFileAsync();
+        return _hostFileDialogService.PickImportFileAsync();
     }
 
     public Task<HostOperationResult> SetMinimizeToTray(ToggleSettingRequest request)
@@ -95,6 +146,63 @@ public sealed class PasswordVaultHostBridge
     public Task<HostOperationResult> OpenAutostartSettings()
     {
         return _hostPlatformService.OpenAutostartSettingsAsync();
+    }
+
+    public Task<HostOperationResult> OpenExternalUrl(OpenUrlRequest request)
+    {
+        return _hostPlatformService.OpenExternalUrlAsync(request?.Url ?? string.Empty);
+    }
+
+    public Task<PasskeyBridgeState> GetPasskeyState()
+    {
+        return _passkeyHostService.GetStateAsync();
+    }
+
+    public Task<IReadOnlyList<PasskeyMetadataState>> ListPasskeys()
+    {
+        return _passkeyHostService.ListPasskeysAsync();
+    }
+
+    public Task<HostOperationResult> RefreshPasskeyMetadata()
+    {
+        return _passkeyHostService.RefreshMetadataAsync();
+    }
+
+    public Task<HostOperationResult> CreatePasskey(PasskeyCreateRequest request)
+    {
+        return _passkeyHostService.CreatePasskeyAsync(request ?? new PasskeyCreateRequest());
+    }
+
+    public Task<HostOperationResult> UsePasskey(PasskeyUseRequest request)
+    {
+        return _passkeyHostService.UsePasskeyAsync(request ?? new PasskeyUseRequest());
+    }
+
+    public Task<HostOperationResult> DeletePasskey(PasskeyDeleteRequest request)
+    {
+        return _passkeyHostService.DeletePasskeyAsync(request ?? new PasskeyDeleteRequest());
+    }
+
+    public Task<HostOperationResult> ResolvePasskeyOperation(PasskeyOperationResolutionRequest request)
+    {
+        return _passkeyHostService.ResolveLatestOperationAsync(
+            request?.Resolution ?? string.Empty,
+            request?.Message ?? string.Empty);
+    }
+
+    public Task<HostOperationResult> LaunchPasskeyCompanion()
+    {
+        return _passkeyHostService.LaunchCompanionAsync();
+    }
+
+    public Task<HostOperationResult> RestartPasskeyCompanion()
+    {
+        return _passkeyHostService.RestartCompanionAsync();
+    }
+
+    public Task<HostOperationResult> SetPasskeyCompanionAutoLaunch(ToggleSettingRequest request)
+    {
+        return _passkeyHostService.SetCompanionAutoLaunchAsync(request?.Enabled ?? false);
     }
 
     public Task<SyncSettingsState> GetSyncSettings()
@@ -135,5 +243,10 @@ public sealed class PasswordVaultHostBridge
     public Task<HostTextOperationResult> DownloadLanSnapshot(DownloadLanSnapshotRequest request)
     {
         return _hostSyncService.DownloadLanSnapshotAsync(request);
+    }
+
+    public Task<HostOperationResult> UploadLanMergedRecords(UploadLanMergedRecordsRequest request)
+    {
+        return _hostSyncService.UploadLanMergedRecordsAsync(request);
     }
 }

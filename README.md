@@ -11,6 +11,23 @@ The project is designed around one shared frontend with zero backend dependency:
 
 The app stores encrypted vault data locally in `IndexedDB`, uses the `Web Crypto API` for browser-side encryption, and keeps host-only platform features behind a thin bridge so the web UI can stay portable.
 
+## Release Notes
+
+### v1.1.0
+
+`v1.1.0` was the first major security and host-integration milestone for Password Vault Hybrid. This release introduced the new `Secret Key`-based vault protection model, improved biometric unlock so the host stores a protected vault-unlock artifact instead of relying on the web layer to keep the master password, added configurable biometric re-auth intervals, upgraded LAN sync to a TLS-protected flow, and improved Windows / Android host behavior with safer auto-lock handling, system notifications, and mobile safe-area fixes. It also refined the app structure and onboarding experience so the product felt more complete and reliable across hybrid host environments.
+
+Highlights in `v1.1.0`:
+
+- Added `Secret Key` support for stronger recovery and cross-device unlock
+- Reworked local encryption flow so the master password is no longer treated as the direct long-lived unlock material
+- Improved biometric unlock integration for Windows and Android hosts
+- Added configurable manual re-auth intervals for biometric unlock
+- Secured LAN sync with TLS and fingerprint validation
+- Improved Android safe-area handling and bottom navigation behavior
+- Improved platform auto-lock behavior and host-driven notifications
+- Refined onboarding and first-use guidance
+
 ## Highlights
 
 - Master password setup, unlock, and password rotation
@@ -21,7 +38,8 @@ The app stores encrypted vault data locally in `IndexedDB`, uses the `Web Crypto
 - Favorites, recently deleted items, batch favorite, and batch delete
 - Live search across site name, username, and notes
 - Random password generator
-- CSV import and CSV / TXT export
+- 1Password `1PUX` / `CSV` import plus generic CSV import
+- CSV / TXT export
 - First-run onboarding
 - Language switching and theme switching
 - Windows Hello / Android biometric unlock through the host
@@ -65,6 +83,12 @@ The app stores encrypted vault data locally in `IndexedDB`, uses the `Web Crypto
 - `HybridWebView`
 - `SecureStorage`
 - Windows and Android host services for biometrics, files, tray/background handling, notifications, and sync transport
+
+## Design Docs
+
+- [Windows passkey integration design](./docs/windows-passkey-design.md)
+- [Windows third-party passkey manager roadmap](./docs/windows-passkey-plugin-roadmap.md)
+- [Windows passkey companion scaffold](./windows-passkey-plugin/PasswordVault.PasskeyCompanion/README.md)
 
 ## Password Save Flow
 
@@ -136,6 +160,22 @@ Important implementation note:
 - Transport is protected with TLS and certificate fingerprint validation
 - The UI asks for confirmation before replacing the local encrypted vault snapshot
 - The latest added item from both devices is shown as a sanity check before sync
+
+## Import and Migration
+
+The app can import:
+
+- `1Password 1PUX`
+- `1Password CSV`
+- generic CSV files
+
+Current migration behavior:
+
+- `1PUX` is treated as the preferred 1Password migration format because it preserves more structured data than CSV
+- login items are prioritized during 1Password import
+- extra fields such as URLs, tags, notes, and custom field values are merged into the local notes list when possible
+- import conflict handling uses `site + username` matching, not just `username`
+- items that cannot be imported automatically are shown in a follow-up review dialog so the user can add them manually
 
 ## Auto-Lock and Host Notifications
 
@@ -237,6 +277,38 @@ dotnet clean blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-windows10.0.
 dotnet clean blazor/blazorApp/blazorApp/blazorApp.csproj -f net10.0-android
 ```
 
+## Windows Passkey Companion
+
+Build the standalone companion scaffold:
+
+```bash
+npm run build:passkey-companion
+```
+
+Apply a development-time package identity to the companion executable:
+
+```bash
+npm run debug:passkey-companion:identity
+```
+
+Build an `MSIX` package for the companion app:
+
+```bash
+npm run build:passkey-companion:msix
+```
+
+Important notes:
+
+- These two packaging-oriented companion commands require the official `winapp` CLI to be installed on the machine
+- The scripts use `windows-passkey-plugin/PasswordVault.PasskeyCompanion/appxmanifest.xml`
+- Companion package assets are stored under `windows-passkey-plugin/PasswordVault.PasskeyCompanion/Assets`
+- The packaged companion manifest now includes the COM-server skeleton entry that will be used by the Windows passkey plugin route
+- The generated `MSIX` and development certificate files are written under:
+
+```text
+windows-passkey-plugin/PasswordVault.PasskeyCompanion/bin/Release/msix
+```
+
 ## Windows Release Publishing
 
 Generate the unpackaged Windows publish folder:
@@ -257,6 +329,15 @@ Generate the Windows installer from the project root:
 npm run setup:windows
 ```
 
+This installer flow now does all of the following in one run:
+
+- builds the latest Vue frontend
+- syncs the latest frontend output into the MAUI host
+- publishes the Windows MAUI host
+- publishes the Windows passkey companion
+- bundles the companion into the installed app under `PasskeyCompanion/`
+- builds the final installer
+
 Output:
 
 ```text
@@ -264,6 +345,11 @@ blazor/blazorApp/blazorApp/bin/Release/Installer
 ```
 
 The installer version is read from the root `package.json` `version` field first, then falls back to the MAUI host `ApplicationDisplayVersion`.
+
+Important note:
+
+- the plain `dotnet publish` command for the MAUI host only produces the main app publish folder
+- the bundled installer generated by `npm run setup:windows` is the recommended way to distribute the Windows build when passkey companion support is needed
 
 ## Android Release Publishing
 
@@ -328,10 +414,11 @@ connect-src 'self' https:
 
 ## Known Notes
 
-- LAN sync currently replaces the full encrypted vault snapshot instead of doing incremental merge
+- LAN sync and WebDAV sync now support incremental review, but conflict handling still depends on manual user choice rather than a background merge strategy
 - Browser PWA installation works best on `HTTPS` or `localhost`
 - Android 13+ may request notification permission before auto-lock notifications can be shown
 - The frontend build still emits a large chunk warning because Vuetify and icon assets are substantial
+- The Windows passkey companion packaging scripts are prepared, but `winapp` CLI is not bundled with this repository
 
 ## Roadmap Ideas
 

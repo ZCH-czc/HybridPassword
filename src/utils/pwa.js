@@ -18,9 +18,28 @@ export async function registerPwaIfSupported() {
     return;
   }
 
-  try {
-    await navigator.serviceWorker.register("./sw.js");
-  } catch (error) {
-    console.warn("PWA service worker registration failed.", error);
+  const registerServiceWorker = async () => {
+    try {
+      await navigator.serviceWorker.register("./sw.js");
+    } catch (error) {
+      console.warn("PWA service worker registration failed.", error);
+    }
+  };
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(() => {
+      void registerServiceWorker();
+    }, { timeout: 2500 });
+    return;
   }
+
+  window.addEventListener(
+    "load",
+    () => {
+      window.setTimeout(() => {
+        void registerServiceWorker();
+      }, 0);
+    },
+    { once: true }
+  );
 }

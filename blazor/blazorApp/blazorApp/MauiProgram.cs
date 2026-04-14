@@ -25,6 +25,10 @@ public static class MauiProgram
         builder.Services.AddSingleton<IHostNotificationService, HostNotificationService>();
         builder.Services.AddSingleton<IHostAutoLockService, HostAutoLockService>();
         builder.Services.AddSingleton<IHostPlatformService, HostPlatformService>();
+        builder.Services.AddSingleton<IPasskeyDiagnosticsService, PasskeyDiagnosticsService>();
+        builder.Services.AddSingleton<IPasskeyCompanionClientService, PasskeyCompanionClientService>();
+        builder.Services.AddSingleton<IPasskeyCompanionLauncherService, PasskeyCompanionLauncherService>();
+        builder.Services.AddSingleton<IPasskeyHostService, PasskeyHostService>();
         builder.Services.AddSingleton<IHostSyncService, HostSyncService>();
         builder.Services.AddSingleton<PasswordVaultHostBridge>();
         builder.Services.AddSingleton<MainPage>();

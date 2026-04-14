@@ -9,3 +9,6 @@ obj
 *.nupkg
 coverage
 *.log
+*.pfx
+*.cer
+*.msix

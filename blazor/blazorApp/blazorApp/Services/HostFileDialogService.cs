@@ -24,7 +24,7 @@ public sealed class HostFileDialogService : IHostFileDialogService
                 return new HostFileOperationResult
                 {
                     Success = false,
-                    Message = "保存文件前需要系统存储权限。",
+                    Message = "Storage permission is required before saving files.",
                 };
             }
 #endif
@@ -38,7 +38,7 @@ public sealed class HostFileDialogService : IHostFileDialogService
                 {
                     Success = false,
                     Cancelled = saveResult.Exception is null,
-                    Message = saveResult.Exception?.Message ?? "文件保存已取消。",
+                    Message = saveResult.Exception?.Message ?? "File saving was cancelled.",
                     FileName = fileName,
                     FilePath = saveResult.FilePath ?? string.Empty,
                 };
@@ -47,7 +47,7 @@ public sealed class HostFileDialogService : IHostFileDialogService
             return new HostFileOperationResult
             {
                 Success = true,
-                Message = "文件已保存。",
+                Message = "File saved.",
                 FileName = fileName,
                 FilePath = saveResult.FilePath ?? string.Empty,
             };
@@ -63,19 +63,30 @@ public sealed class HostFileDialogService : IHostFileDialogService
         }
     }
 
-    public async Task<HostFileOperationResult> PickCsvFileAsync()
+    public async Task<HostFileOperationResult> PickImportFileAsync()
     {
         try
         {
             var result = await FilePicker.Default.PickAsync(new PickOptions
             {
-                PickerTitle = "选择要导入的 CSV 文件",
+                PickerTitle = "Choose a file to import",
                 FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    { DevicePlatform.Android, new[] { "text/csv", "text/comma-separated-values", "application/csv" } },
-                    { DevicePlatform.WinUI, new[] { ".csv" } },
-                    { DevicePlatform.iOS, new[] { "public.comma-separated-values-text" } },
-                    { DevicePlatform.MacCatalyst, new[] { "public.comma-separated-values-text" } },
+                    {
+                        DevicePlatform.Android,
+                        new[]
+                        {
+                            "text/csv",
+                            "text/comma-separated-values",
+                            "application/csv",
+                            "application/zip",
+                            "application/x-zip-compressed",
+                            "application/octet-stream",
+                        }
+                    },
+                    { DevicePlatform.WinUI, new[] { ".csv", ".1pux", ".zip" } },
+                    { DevicePlatform.iOS, new[] { "public.comma-separated-values-text", "public.zip-archive" } },
+                    { DevicePlatform.MacCatalyst, new[] { "public.comma-separated-values-text", "public.zip-archive" } },
                 }),
             });
 
@@ -85,21 +96,25 @@ public sealed class HostFileDialogService : IHostFileDialogService
                 {
                     Success = false,
                     Cancelled = true,
-                    Message = "已取消选择文件。",
+                    Message = "File selection was cancelled.",
                 };
             }
 
             await using var stream = await result.OpenReadAsync();
-            using var reader = new StreamReader(stream, Encoding.UTF8, true);
-            var content = await reader.ReadToEndAsync();
+            await using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var bytes = memoryStream.ToArray();
+            var extension = Path.GetExtension(result.FileName);
+            var isCsv = string.Equals(extension, ".csv", StringComparison.OrdinalIgnoreCase);
 
             return new HostFileOperationResult
             {
                 Success = true,
-                Message = "文件已读取。",
+                Message = "File loaded.",
                 FileName = result.FileName ?? string.Empty,
                 FilePath = result.FullPath ?? string.Empty,
-                Content = content,
+                Content = isCsv ? Encoding.UTF8.GetString(bytes) : string.Empty,
+                ContentBase64 = Convert.ToBase64String(bytes),
             };
         }
         catch (Exception exception)

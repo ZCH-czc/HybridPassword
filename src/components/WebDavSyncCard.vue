@@ -59,7 +59,7 @@ function emitSave() {
 </script>
 
 <template>
-  <v-card class="border-sm">
+  <v-card class="border-sm webdav-card">
     <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
       <span>{{ t("settings.webDav") }}</span>
       <v-chip color="primary" variant="tonal">{{ t("settings.encryptedSnapshot") }}</v-chip>
@@ -99,8 +99,12 @@ function emitSave() {
           <v-text-field
             v-model="form.password"
             :label="t('settings.webDavPassword')"
-            type="password"
+            type="text"
+            class="vault-masked-field"
             autocomplete="new-password"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
             variant="solo-filled"
             hide-details
             :disabled="disabled"
@@ -108,7 +112,7 @@ function emitSave() {
         </v-col>
       </v-row>
 
-      <v-sheet class="rounded-xl px-4 py-3 bg-surface-variant text-body-2 text-medium-emphasis">
+      <v-sheet class="rounded-xl px-4 py-3 vault-surface-block vault-surface-block--subtle text-body-2 text-medium-emphasis">
         <div>{{ t("settings.webDavHint") }}</div>
         <div class="mt-1">
           {{ settings.hasPassword ? t("settings.webDavPasswordSaved") : t("settings.webDavPasswordEmpty") }}
@@ -147,3 +151,9 @@ function emitSave() {
     </v-card-text>
   </v-card>
 </template>
+
+<style scoped>
+.webdav-card {
+  background: var(--vault-panel-bg);
+}
+</style>

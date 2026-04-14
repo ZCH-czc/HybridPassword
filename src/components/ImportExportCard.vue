@@ -34,21 +34,32 @@ watch(localStrategy, (value) => {
 </script>
 
 <template>
-  <v-card class="border-sm">
+  <v-card class="border-sm import-export-card">
     <v-card-title>{{ t("settings.importExport") }}</v-card-title>
 
     <v-card-text>
       <div class="text-body-2 text-medium-emphasis mb-2">{{ t("settings.importStrategy") }}</div>
 
-      <v-radio-group v-model="localStrategy" hide-details density="comfortable">
-        <v-radio :label="t('settings.importOverwrite')" value="overwrite" />
-        <v-radio :label="t('settings.importSkip')" value="skip" />
-      </v-radio-group>
+      <v-sheet class="import-strategy-group vault-surface-block rounded-xl pa-2">
+        <v-radio-group v-model="localStrategy" hide-details density="comfortable">
+          <v-sheet class="import-strategy-option vault-surface-block vault-surface-block--subtle rounded-xl px-4 py-3">
+            <v-radio :label="t('settings.importOverwrite')" value="overwrite" />
+          </v-sheet>
+          <v-sheet class="import-strategy-option vault-surface-block vault-surface-block--subtle rounded-xl px-4 py-3 mt-2">
+            <v-radio :label="t('settings.importSkip')" value="skip" />
+          </v-sheet>
+        </v-radio-group>
+      </v-sheet>
 
-      <v-sheet class="mt-4 rounded-xl px-4 py-3 bg-surface-variant text-body-2 text-medium-emphasis">
+      <v-sheet class="mt-4 rounded-xl px-4 py-3 import-hint vault-surface-block vault-surface-block--subtle text-body-2 text-medium-emphasis">
         <div>{{ t("settings.importExportHint") }}</div>
         <div class="mt-1">
           {{ nativeFileDialogsAvailable ? t("settings.importExportNativeHint") : t("settings.importExportBrowserHint") }}
+        </div>
+        <div class="d-flex flex-wrap ga-2 mt-3">
+          <span class="import-format-pill">1Password 1PUX</span>
+          <span class="import-format-pill">1Password CSV</span>
+          <span class="import-format-pill">CSV</span>
         </div>
       </v-sheet>
 
@@ -75,9 +86,42 @@ watch(localStrategy, (value) => {
           :loading="busy"
           @click="emit('import', localStrategy)"
         >
-          {{ t("settings.importCsv") }}
+          {{ t("settings.importFile") }}
         </v-btn>
       </div>
     </v-card-text>
   </v-card>
 </template>
+
+<style scoped>
+.import-export-card {
+  background: var(--vault-panel-bg);
+}
+
+.import-strategy-group,
+.import-hint,
+.import-strategy-option {
+  box-shadow: none;
+}
+
+.import-format-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+:deep(.import-strategy-option .v-selection-control) {
+  margin: 0;
+}
+
+:deep(.import-strategy-option .v-selection-control__input),
+:deep(.import-strategy-option .v-icon) {
+  box-shadow: none !important;
+}
+</style>

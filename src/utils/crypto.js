@@ -251,6 +251,15 @@ async function verifyVaultKey(cryptoKey, config) {
   }
 }
 
+export async function verifyVaultKeyCompatibility(cryptoKey, config) {
+  try {
+    await verifyVaultKey(cryptoKey, config);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function unwrapLocalVaultKey(passphrase, config) {
   const localWrapKey = await deriveLocalWrapKey(passphrase, config.localSalt);
   const vaultKeyBytes = await decryptBytes(config.localWrappedVaultKey, localWrapKey);

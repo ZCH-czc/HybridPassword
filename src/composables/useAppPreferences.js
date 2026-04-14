@@ -124,6 +124,9 @@ Object.assign(messages["zh-CN"], {
   "deleted.deletedAt": ({ time }) => `删除于 ${time}`,
   "deleted.restore": "恢复",
   "deleted.permanentDelete": "彻底删除",
+  "deleted.restoreSelected": "恢复选中",
+  "deleted.deleteSelected": "删除选中",
+  "deleted.selectionCount": ({ count }) => `已选 ${count} 条`,
   "generator.title": "随机密码生成器",
   "generator.length": "密码长度",
   "generator.uppercase": "大写字母 A-Z",
@@ -207,15 +210,17 @@ Object.assign(messages["zh-CN"], {
     "Android 不同厂商的自启动入口不统一，这里会优先打开系统相关设置页。",
   "settings.openSystemSettings": "打开系统设置",
   "settings.importExport": "导入与导出",
-  "settings.importStrategy": "CSV 冲突策略",
-  "settings.importOverwrite": "按用户名覆盖已有记录",
-  "settings.importSkip": "按用户名跳过重复记录",
-  "settings.importExportHint": "多条备注会使用 | 连接保存。",
+  "settings.importStrategy": "导入冲突策略",
+  "settings.importOverwrite": "按网站和用户名覆盖已有记录",
+  "settings.importSkip": "按网站和用户名跳过重复记录",
+  "settings.importExportHint": "支持 1Password 1PUX、1Password CSV 与标准 CSV，额外字段会尽量并入备注。",
   "settings.importExportNativeHint": "当前会调用系统文件管理器。",
   "settings.importExportBrowserHint": "浏览器调试环境会使用网页文件选择与下载。",
   "settings.exportCsv": "导出 CSV",
   "settings.exportTxt": "导出 TXT",
-  "settings.importCsv": "导入 CSV",
+  "settings.importFile": "导入 1Password / CSV",
+  "settings.pendingImportReview": "最近待处理的导入冲突",
+  "settings.pendingImportReviewBody": "这里会保留导入时未自动处理的项目。即使误关弹窗，也可以回来继续补录或移除。",
   "settings.webDav": "WebDAV 同步",
   "settings.encryptedSnapshot": "加密快照",
   "settings.webDavUrl": "WebDAV 地址",
@@ -265,14 +270,30 @@ Object.assign(messages["zh-CN"], {
   "notify.deleteFailed": "删除失败。",
   "notify.restored": "密码记录已恢复。",
   "notify.restoreFailed": "恢复失败。",
+  "notify.restoredMany": ({ count }) => `已恢复 ${count} 条密码记录。`,
   "notify.permanentlyDeleted": "密码记录已彻底删除。",
   "notify.permanentDeleteFailed": "彻底删除失败。",
+  "notify.permanentlyDeletedMany": ({ count }) => `已彻底删除 ${count} 条密码记录。`,
   "notify.exportSaved": ({ format }) => `${format} 已保存。`,
   "notify.exportSuccess": ({ format }) => `${format} 导出成功。`,
   "notify.exportFailed": "导出失败。",
-  "notify.importDone": ({ created, updated, skipped }) =>
-    `导入完成：新增 ${created}条，覆盖 ${updated}条，跳过 ${skipped}条。`,
-  "notify.importFailed": "CSV 导入失败。",
+  "notify.importDone": ({ created, updated, skipped, ignored, sourceLabel }) =>
+    `${sourceLabel || "导入"}完成：新增 ${created}条，覆盖 ${updated}条，跳过 ${skipped}条，忽略 ${ignored || 0}条不兼容项目。`,
+  "notify.importFailed": "导入失败。",
+  "importReview.title": "这些项目需要你确认",
+  "importReview.description": ({ count }) =>
+    `有 ${count} 条项目没有被自动导入。你可以查看原因，并带着已识别的信息手动补录。关闭弹窗后，这些项目仍会保存在设置里。`,
+  "importReview.capturedNotes": "已识别的信息",
+  "importReview.moreNotes": ({ count }) => `还有 ${count} 条`,
+  "importReview.addManually": "手动添加",
+  "importReview.addSelectedManually": "手动补录选中",
+  "importReview.dismiss": "移出待处理",
+  "importReview.dismissSelected": "移除选中",
+  "importReview.selectionCount": ({ count }) => `已选 ${count} 条`,
+  "importReview.savedHint": "关闭弹窗后，这些项目仍会保存在设置中。",
+  "importReview.emptyTitle": "暂无待处理导入冲突",
+  "importReview.emptyBody": "导入时未兼容或需要你确认的项目会先保存在这里。",
+  "importReview.updatedAt": ({ time }) => `最近更新 ${time}`,
   "notify.generatedCopied": "随机密码已复制到剪贴板。",
   "notify.generatedCopyFailed": "复制随机密码失败，请检查剪贴板权限。",
   "notify.bulkFavorite": ({ count }) => `已收藏 ${count}条记录。`,
@@ -423,6 +444,9 @@ Object.assign(messages["en-US"], {
   "deleted.deletedAt": ({ time }) => `Deleted ${time}`,
   "deleted.restore": "Restore",
   "deleted.permanentDelete": "Delete forever",
+  "deleted.restoreSelected": "Restore selected",
+  "deleted.deleteSelected": "Delete selected",
+  "deleted.selectionCount": ({ count }) => `${count} selected`,
   "generator.title": "Password generator",
   "generator.length": "Password length",
   "generator.uppercase": "Uppercase A-Z",
@@ -518,16 +542,20 @@ Object.assign(messages["en-US"], {
     "Android vendors expose these settings differently, so the app opens the most relevant system page it can find.",
   "settings.openSystemSettings": "Open system settings",
   "settings.importExport": "Import and export",
-  "settings.importStrategy": "CSV conflict strategy",
-  "settings.importOverwrite": "Overwrite existing entries by username",
-  "settings.importSkip": "Skip duplicates by username",
-  "settings.importExportHint": "Multiple notes are joined with | when saved.",
+  "settings.importStrategy": "Import conflict strategy",
+  "settings.importOverwrite": "Overwrite by site and username",
+  "settings.importSkip": "Skip duplicates by site and username",
+  "settings.importExportHint":
+    "Supports 1Password 1PUX, 1Password CSV, and standard CSV. Extra fields are preserved in notes when possible.",
   "settings.importExportNativeHint": "The system file manager will be used.",
   "settings.importExportBrowserHint":
     "In browser debugging, web file pickers and downloads are used.",
   "settings.exportCsv": "Export CSV",
   "settings.exportTxt": "Export TXT",
-  "settings.importCsv": "Import CSV",
+  "settings.importFile": "Import 1Password / CSV",
+  "settings.pendingImportReview": "Recent pending import conflicts",
+  "settings.pendingImportReviewBody":
+    "Import items that still need your review stay here, so closing the dialog by mistake does not lose them.",
   "settings.webDav": "WebDAV sync",
   "settings.encryptedSnapshot": "Encrypted snapshot",
   "settings.webDavUrl": "WebDAV URL",
@@ -584,14 +612,32 @@ Object.assign(messages["en-US"], {
   "notify.deleteFailed": "Unable to delete the selected entry.",
   "notify.restored": "Password entry restored.",
   "notify.restoreFailed": "Unable to restore the selected entry.",
+  "notify.restoredMany": ({ count }) =>
+    `${count} ${count === 1 ? "entry was" : "entries were"} restored.`,
   "notify.permanentlyDeleted": "Password entry permanently deleted.",
   "notify.permanentDeleteFailed": "Unable to delete the selected entry permanently.",
+  "notify.permanentlyDeletedMany": ({ count }) =>
+    `${count} ${count === 1 ? "entry was" : "entries were"} permanently deleted.`,
   "notify.exportSaved": ({ format }) => `${format} saved successfully.`,
   "notify.exportSuccess": ({ format }) => `${format} exported successfully.`,
   "notify.exportFailed": "Unable to export your data.",
-  "notify.importDone": ({ created, updated, skipped }) =>
-    `Import complete: ${created} created, ${updated} overwritten, ${skipped} skipped.`,
-  "notify.importFailed": "CSV import failed.",
+  "notify.importDone": ({ created, updated, skipped, ignored, sourceLabel }) =>
+    `${sourceLabel || "Import"} complete: ${created} created, ${updated} overwritten, ${skipped} skipped, ${ignored || 0} ignored.`,
+  "notify.importFailed": "Import failed.",
+  "importReview.title": "Items that need your review",
+  "importReview.description": ({ count }) =>
+    `${count} items were not imported automatically. Review the reason and add them manually if you want to keep them. If you close this dialog, the items stay available in Settings.`,
+  "importReview.capturedNotes": "Captured details",
+  "importReview.moreNotes": ({ count }) => `${count} more`,
+  "importReview.addManually": "Add manually",
+  "importReview.addSelectedManually": "Add selected manually",
+  "importReview.dismiss": "Remove from pending",
+  "importReview.dismissSelected": "Remove selected",
+  "importReview.selectionCount": ({ count }) => `${count} selected`,
+  "importReview.savedHint": "Closing this dialog will keep the items in Settings.",
+  "importReview.emptyTitle": "No pending import conflicts",
+  "importReview.emptyBody": "Items that could not be imported automatically will stay here until you review them.",
+  "importReview.updatedAt": ({ time }) => `Updated ${time}`,
   "notify.generatedCopied": "Generated password copied to clipboard.",
   "notify.generatedCopyFailed":
     "Unable to copy the generated password. Check clipboard permissions.",
@@ -768,6 +814,122 @@ Object.assign(messages["en-US"], {
   "notify.trayAutoLockFailed": "Unable to update the tray auto-lock delay.",
   "notify.backgroundAutoLockUpdated": "Background auto-lock delay updated.",
   "notify.backgroundAutoLockFailed": "Unable to update the background auto-lock delay.",
+});
+
+Object.assign(messages["zh-CN"], {
+  "syncIncremental.title": "增量同步",
+  "syncIncremental.description": ({ source }) => `正在与 ${source} 比对差异并生成合并结果。`,
+  "syncIncremental.body":
+    "仅存在于某一侧的密码会逐条等待确认；发现冲突时，你可以查看双方的详细内容并选择保留哪一边。",
+  "syncIncremental.pendingChanges": ({ count }) => `待确认 ${count} 项`,
+  "syncIncremental.remoteOnlyTitle": "仅目标设备存在",
+  "syncIncremental.remoteOnlyBody": "这些密码当前设备还没有，你可以逐条决定是否加入合并结果。",
+  "syncIncremental.localOnlyTitle": "仅当前设备存在",
+  "syncIncremental.localOnlyBody": "这些密码尚未出现在目标设备侧，你可以决定是否保留到这次合并结果中。",
+  "syncIncremental.conflictTitle": "冲突处理",
+  "syncIncremental.conflictBody": "同一条账号在两边都有改动，请逐项选择保留当前设备还是目标设备的数据。",
+  "syncIncremental.includeRemote": "加入结果",
+  "syncIncremental.skipRemote": "忽略这条",
+  "syncIncremental.keepLocal": "保留这条",
+  "syncIncremental.skipLocal": "不合并",
+  "syncIncremental.chooseLocal": "保留当前设备",
+  "syncIncremental.chooseRemote": "保留目标设备",
+  "syncIncremental.recommended": "推荐",
+  "syncIncremental.statusActive": "有效记录",
+  "syncIncremental.statusDeleted": "最近删除",
+  "syncIncremental.apply": "应用合并结果",
+  "syncIncremental.noChangesTitle": "没有需要人工确认的差异",
+  "syncIncremental.noChangesBody": "两边没有发现新增密码或冲突项，可以继续使用当前设备的数据。",
+  "notify.incrementalSyncReady": "已生成增量同步清单，请逐项确认。",
+  "notify.incrementalSyncNothingToMerge": "两边没有发现需要增量处理的密码差异。",
+  "notify.incrementalSyncApplied": "增量同步已完成，本机已更新为合并后的结果。",
+  "notify.incrementalSyncReceived": ({ source }) => `已接收来自 ${source} 的增量同步结果。`,
+  "notify.incrementalSyncPrepareFailed": "生成增量同步清单失败。",
+  "notify.incrementalSyncApplyFailed": "应用增量同步结果失败。",
+  "notify.incrementalSyncPushFailed": "本机已完成合并，但回推到目标设备失败。",
+});
+
+Object.assign(messages["en-US"], {
+  "syncIncremental.title": "Incremental sync",
+  "syncIncremental.description": ({ source }) =>
+    `Comparing changes against ${source} and preparing a merged result.`,
+  "syncIncremental.body":
+    "Passwords that only exist on one side are reviewed one by one. If a conflict is found, you can inspect both versions and choose which one to keep.",
+  "syncIncremental.pendingChanges": ({ count }) => `${count} pending`,
+  "syncIncremental.remoteOnlyTitle": "Only on the source device",
+  "syncIncremental.remoteOnlyBody":
+    "These passwords do not exist on the current device yet. Decide one by one whether they should be merged in.",
+  "syncIncremental.localOnlyTitle": "Only on the current device",
+  "syncIncremental.localOnlyBody":
+    "These passwords are missing on the source side. Decide whether they should remain in this merged result.",
+  "syncIncremental.conflictTitle": "Resolve conflicts",
+  "syncIncremental.conflictBody":
+    "The same account was changed on both sides. Review the details and choose which version should win.",
+  "syncIncremental.includeRemote": "Merge this",
+  "syncIncremental.skipRemote": "Skip it",
+  "syncIncremental.keepLocal": "Keep this",
+  "syncIncremental.skipLocal": "Do not merge",
+  "syncIncremental.chooseLocal": "Keep current device",
+  "syncIncremental.chooseRemote": "Keep source device",
+  "syncIncremental.recommended": "Recommended",
+  "syncIncremental.statusActive": "Active",
+  "syncIncremental.statusDeleted": "Deleted",
+  "syncIncremental.apply": "Apply merged result",
+  "syncIncremental.noChangesTitle": "No manual differences found",
+  "syncIncremental.noChangesBody":
+    "No new passwords or conflicts were detected between the two devices.",
+  "notify.incrementalSyncReady": "The incremental sync review is ready.",
+  "notify.incrementalSyncNothingToMerge":
+    "No incremental password differences were found between the two devices.",
+  "notify.incrementalSyncApplied": "Incremental sync finished and the merged result was applied.",
+  "notify.incrementalSyncReceived": ({ source }) =>
+    `A merged incremental sync result was received from ${source}.`,
+  "notify.incrementalSyncPrepareFailed": "Unable to prepare the incremental sync review.",
+  "notify.incrementalSyncApplyFailed": "Unable to apply the incremental sync result.",
+  "notify.incrementalSyncPushFailed":
+    "The merged result was applied locally, but pushing it back to the source device failed.",
+});
+
+Object.assign(messages["zh-CN"], {
+  "settings.lanHint":
+    "扫描后会先比对两边差异。仅存在于某一侧的密码会逐条确认，发生冲突时会展示双方详细内容供你选择。",
+  "settings.useDeviceData": "查看差异并同步",
+});
+
+Object.assign(messages["en-US"], {
+  "settings.lanHint":
+    "After scanning, both sides are compared first. Passwords that only exist on one side are reviewed one by one, and conflicts show both versions in detail.",
+  "settings.useDeviceData": "Review and sync",
+});
+
+Object.assign(messages["zh-CN"], {
+  "settings.clearAllData": "清除全部数据",
+  "settings.clearAllDataBody":
+    "输入当前主密码后，会删除本机保险库、最近删除、生物识别、同步配置和平台偏好，并回到首次使用状态。",
+  "settings.clearAllDataAction": "清除全部数据",
+  "clearData.title": "清除全部数据",
+  "clearData.description":
+    "这是一次不可撤销的本机重置。继续后，当前设备上的密码库、本地同步配置和生物识别凭据都会被清空。",
+  "clearData.warning": "请输入当前主密码确认这次操作。",
+  "clearData.passphrase": "当前主密码",
+  "clearData.submit": "确认清除",
+  "notify.clearAllDataDone": "本机数据已清除，已回到首次使用状态。",
+  "notify.clearAllDataFailed": "清除全部数据失败。",
+});
+
+Object.assign(messages["en-US"], {
+  "settings.clearAllData": "Clear all data",
+  "settings.clearAllDataBody":
+    "Enter the current master password to remove the local vault, recently deleted items, biometrics, sync settings, and platform preferences, then return to first-run state.",
+  "settings.clearAllDataAction": "Clear all data",
+  "clearData.title": "Clear all data",
+  "clearData.description":
+    "This performs a local reset on this device. Your vault, local sync settings, and biometric credentials on this device will be removed.",
+  "clearData.warning": "Enter the current master password to confirm this action.",
+  "clearData.passphrase": "Current master password",
+  "clearData.submit": "Clear everything",
+  "notify.clearAllDataDone": "Local data was cleared and the app returned to first-run state.",
+  "notify.clearAllDataFailed": "Unable to clear all local data.",
 });
 
 function normalizeLocale(locale) {

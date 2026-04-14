@@ -111,6 +111,45 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
         await Task.CompletedTask;
     }
 
+    public async Task<HostOperationResult> ResetPlatformStateAsync()
+    {
+#if WINDOWS
+        Preferences.Default.Remove(WindowsMinimizeToTrayKey);
+        Preferences.Default.Remove(WindowsLaunchAtStartupKey);
+        await _hostAutoLockService.SetTrayAutoLockMinutesAsync(0);
+
+        try
+        {
+            await EnsureWindowsStartupRegistrationAsync(false);
+        }
+        catch
+        {
+        }
+
+        return new HostOperationResult
+        {
+            Success = true,
+            Message = "Windows host settings cleared.",
+        };
+#elif ANDROID
+        Preferences.Default.Remove(AndroidExcludeFromRecentsKey);
+        await _hostAutoLockService.SetBackgroundAutoLockMinutesAsync(0);
+        AndroidHostPlatformBootstrap.ApplyExcludeFromRecents(Platform.CurrentActivity, false);
+
+        return new HostOperationResult
+        {
+            Success = true,
+            Message = "Android host settings cleared.",
+        };
+#else
+        return new HostOperationResult
+        {
+            Success = true,
+            Message = "Host settings cleared.",
+        };
+#endif
+    }
+
     public Task<HostOperationResult> SetMinimizeToTrayAsync(bool enabled)
     {
 #if WINDOWS
@@ -196,6 +235,36 @@ public sealed class HostPlatformService : IHostPlatformService, IDisposable
 #else
         return Task.FromResult(BuildUnsupportedResult("当前平台没有自启动设置入口。"));
 #endif
+    }
+
+    public async Task<HostOperationResult> OpenExternalUrlAsync(string url)
+    {
+        if (!System.Uri.TryCreate(url, System.UriKind.Absolute, out var uri))
+        {
+            return new HostOperationResult
+            {
+                Success = false,
+                Message = "The URL is invalid.",
+            };
+        }
+
+        try
+        {
+            await Launcher.Default.OpenAsync(uri);
+            return new HostOperationResult
+            {
+                Success = true,
+                Message = "Opened external link.",
+            };
+        }
+        catch (Exception ex)
+        {
+            return new HostOperationResult
+            {
+                Success = false,
+                Message = $"Unable to open the external link: {ex.Message}",
+            };
+        }
     }
 
     public void Dispose()

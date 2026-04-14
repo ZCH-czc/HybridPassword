@@ -6,5 +6,7 @@ public interface IHostWebEventService
 
     Task RequestVaultLockAsync(string reason, string message);
 
+    Task RequestIncrementalSyncApplyAsync(string recordsJson, string sourceLabel);
+
     Task FlushPendingAsync();
 }

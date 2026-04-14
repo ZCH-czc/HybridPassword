@@ -63,3 +63,12 @@ export function pickFileFromBrowser({ accept = "*/*" } = {}) {
     input.click();
   });
 }
+
+export async function readFileAsBytes(file) {
+  if (!file) {
+    throw new Error("No file was selected.");
+  }
+
+  const buffer = await file.arrayBuffer();
+  return new Uint8Array(buffer);
+}
